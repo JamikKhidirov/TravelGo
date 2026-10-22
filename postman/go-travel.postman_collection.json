@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "GoTravel API",
+    "description": "REST API for the GoTravel microservice. Destinations, tours, events, sync, and WebSocket realtime.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "header": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "Destinations",
+      "item": [
+        {
+          "name": "List Destinations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations?country=Италия&city=Рим&page=1&page_size=20",
+            "header": []
+          }
+        },
+        {
+          "name": "Get Destination by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}",
+            "header": []
+          }
+        },
+        {
+          "name": "Create Destination",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Рим\",\n  \"country\": \"Италия\",\n  \"city\": \"Рим\",\n  \"description\": \"Вечный город\",\n  \"image_url\": \"https://picsum.photos/seed/rome/800/600\",\n  \"rating\": 4.8,\n  \"price_from\": 1200,\n  \"currency\": \"USD\",\n  \"source\": \"manual\",\n  \"external_id\": \"manual:rome:1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/destinations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tours",
+      "item": [
+        {
+          "name": "List Tours",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours?destination_id={{destinationId}}&available=true&page=1&page_size=20",
+            "header": []
+          }
+        },
+        {
+          "name": "Get Tour by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours/{{tourId}}",
+            "header": []
+          }
+        },
+        {
+          "name": "Create Tour",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Экскурсия по Риму\",\n  \"description\": \"Гастрономический тур\",\n  \"price\": 450,\n  \"currency\": \"USD\",\n  \"duration_days\": 3,\n  \"start_date\": \"2026-11-01T09:00:00Z\",\n  \"end_date\": \"2026-11-04T18:00:00Z\",\n  \"available\": true,\n  \"image_url\": \"https://picsum.photos/seed/tour1/800/600\",\n  \"source\": \"manual\",\n  \"external_id\": \"manual:tour:1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tours"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "List Events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/events?aggregate=destination&limit=50",
+            "header": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sync",
+      "item": [
+        {
+          "name": "Sync from MSP sources",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/sync",
+            "header": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "Realtime (WebSocket)",
+      "item": [
+        {
+          "name": "WS Events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/ws/events",
+            "header": []
+          },
+          "description": "Open as WebSocket in Postman to receive real-time event broadcasts"
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "destinationId", "value": "", "type": "string" },
+    { "key": "tourId", "value": "", "type": "string" }
+  ]
+}

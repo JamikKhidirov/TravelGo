@@ -1,0 +1,217 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"go-travel/internal/model"
+	"go-travel/internal/service"
+)
+
+type AuthHandler struct {
+	authSvc *service.AuthService
+}
+
+func NewAuthHandler(authSvc *service.AuthService) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc}
+}
+
+func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
+	auth := r.Group("/auth")
+	{
+		auth.POST("/register", h.register)
+		auth.POST("/login", h.login)
+		auth.GET("/me", h.me)
+	}
+}
+
+type registerRequest struct {
+	Email     string `json:"email" validate:"required,email"`
+	Password  string `json:"password" validate:"required,min=6"`
+	FirstName string `json:"first_name" validate:"required"`
+	LastName  string `json:"last_name" validate:"required"`
+	Phone     string `json:"phone"`
+	Role      string `json:"role" validate:"required,oneof=user admin"`
+}
+
+type loginRequest struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}
+
+func (h *AuthHandler) register(c *gin.Context) {
+	var req registerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	u, token, err := h.authSvc.Register(c.Request.Context(), &model.LoginRequest{Email: req.Email, Password: req.Password}, req.FirstName, req.LastName, req.Phone, req.Role)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, model.Response{Success: true, Data: gin.H{"user": u, "token": token}})
+}
+
+func (h *AuthHandler) login(c *gin.Context) {
+	var req loginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	u, token, err := h.authSvc.Login(c.Request.Context(), &model.LoginRequest{Email: req.Email, Password: req.Password})
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"user": u, "token": token}})
+}
+
+func (h *AuthHandler) me(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	role, _ := c.Get("user_role")
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"user_id": userID, "role": role}})
+}
+
+type CartHandler struct {
+	cartSvc *service.CartService
+}
+
+func NewCartHandler(cartSvc *service.CartService) *CartHandler {
+	return &CartHandler{cartSvc: cartSvc}
+}
+
+func (h *CartHandler) RegisterRoutes(r *gin.RouterGroup) {
+	cart := r.Group("/cart")
+	{
+		cart.GET("", h.list)
+		cart.POST("/add", h.add)
+		cart.DELETE("/item/:item_id", h.remove)
+		cart.POST("/checkout", h.checkout)
+	}
+}
+
+type addToCartRequest struct {
+	TourID  string  `json:"tour_id" validate:"required"`
+	Quantity int    `json:"quantity" validate:"min=1"`
+	Price   float64 `json:"price" validate:"gt=0"`
+}
+
+func (h *CartHandler) list(c *gin.Context) {
+	userIDRaw, _ := c.Get("user_id")
+	userIDStr, ok := userIDRaw.(string)
+	if !ok || userIDStr == "" {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "user_id required"})
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	cart, items, err := h.cartSvc.ListCart(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"cart": cart, "items": items}})
+}
+
+func (h *CartHandler) add(c *gin.Context) {
+	userIDRaw, _ := c.Get("user_id")
+	userIDStr, _ := userIDRaw.(string)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	var req addToCartRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	tourID, err := uuid.Parse(req.TourID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid tour_id"})
+		return
+	}
+	item, err := h.cartSvc.AddToCart(c.Request.Context(), userID, tourID, req.Quantity, req.Price)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: item})
+}
+
+func (h *CartHandler) remove(c *gin.Context) {
+	userIDRaw, _ := c.Get("user_id")
+	userIDStr, _ := userIDRaw.(string)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	itemID, err := uuid.Parse(c.Param("item_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid item_id"})
+		return
+	}
+	if err := h.cartSvc.RemoveFromCart(c.Request.Context(), userID, itemID); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "removed"}})
+}
+
+type checkoutRequest struct {
+	TourID         string    `json:"tour_id" validate:"required"`
+	DestinationID  string    `json:"destination_id" validate:"required"`
+	PassengerName  string    `json:"passenger_name" validate:"required"`
+	PassengerEmail string    `json:"passenger_email" validate:"required,email"`
+	PassengerPhone string    `json:"passenger_phone"`
+	TravelDate     string    `json:"travel_date" validate:"required"`
+	Nights         int       `json:"nights" validate:"min=1"`
+	Adults         int       `json:"adults" validate:"min=1"`
+	Children       int       `json:"children"`
+}
+
+func (h *CartHandler) checkout(c *gin.Context) {
+	userIDRaw, _ := c.Get("user_id")
+	userIDStr, _ := userIDRaw.(string)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	var req checkoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	tourID, _ := uuid.Parse(req.TourID)
+	destID, _ := uuid.Parse(req.DestinationID)
+	travelDate, _ := time.Parse(time.RFC3339, req.TravelDate)
+
+	o := &model.Order{
+		TourID:         tourID,
+		DestinationID:  destID,
+		PassengerName:  req.PassengerName,
+		PassengerEmail: req.PassengerEmail,
+		PassengerPhone: req.PassengerPhone,
+		TravelDate:     travelDate,
+		Nights:         req.Nights,
+		Adults:         req.Adults,
+		Children:       req.Children,
+	}
+	order, err := h.cartSvc.Checkout(c.Request.Context(), userID, o)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: order})
+}
+
+var _ = strconv.Itoa
+var _ = time.Time{}

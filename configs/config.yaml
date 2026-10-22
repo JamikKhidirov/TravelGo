@@ -1,0 +1,36 @@
+app:
+  name: go-travel
+  env: development
+  port: 8080
+  read_timeout: 10s
+  write_timeout: 10s
+
+db:
+  host: localhost
+  port: 5432
+  user: travel
+  password: travelpass
+  name: travel_db
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: 300s
+
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+
+kafka:
+  brokers:
+    - localhost:9092
+  topic_travel_events: travel.events
+  topic_sync: travel.sync
+  consumer_group: travel-app
+
+server:
+  origin: "*"
+
+mock:
+  enabled: true
+  base_url: http://localhost:8081
