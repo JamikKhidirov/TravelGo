@@ -1,10 +1,13 @@
+openapi: 3.0.3
 info:
   title: GoTravel API
-  description: Travel microservice written in Go. Collects data from multiple MSP servers, stores in PostgreSQL, caches in Redis, streams events, exposes REST + WebSocket endpoints.
-  version: 1.1.0
+  description: Travel service in Go. Aggregates destinations and tours from multiple MSP servers, stores data in PostgreSQL, caches in Redis, streams realtime geolocation over WebSocket and exposes REST endpoints.
+  version: 1.2.0
 servers:
   - url: http://localhost:8080
+    description: Local Docker
   - url: http://travel-app:8080
+    description: Docker network
 tags:
   - name: health
   - name: destinations
@@ -19,333 +22,835 @@ tags:
   - name: vouchers
   - name: admin
   - name: realtime
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    userHeader:
+      type: apiKey
+      in: header
+      name: X-User-Id
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ItemIdPath:
+      name: item_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OrderIdPath:
+      name: order_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TourIdPath:
+      name: tour_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Response:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: { type: object }
+        error: { type: string }
+        meta: { type: object }
+    RegisterRequest:
+      type: object
+      required: [email, password, first_name, last_name]
+      properties:
+        email: { type: string, format: email, example: user@example.com }
+        password: { type: string, minLength: 6, example: password123 }
+        first_name: { type: string, example: John }
+        last_name: { type: string, example: Doe }
+        phone: { type: string, example: "+1234567890" }
+        role: { type: string, enum: [user, admin], default: user }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: user@example.com }
+        password: { type: string, example: password123 }
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: travel-token-uuid-user-1700000000
+    ChangePasswordRequest:
+      type: object
+      required: [old_password, new_password]
+      properties:
+        old_password: { type: string, example: password123 }
+        new_password: { type: string, minLength: 6, example: newpass456 }
+    UpdateProfileRequest:
+      type: object
+      properties:
+        first_name: { type: string, example: John }
+        last_name: { type: string, example: Doe }
+        phone: { type: string, example: "+1234567890" }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        first_name: { type: string }
+        last_name: { type: string }
+        phone: { type: string }
+        role: { type: string, enum: [user, admin] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Destination:
+      type: object
+      required: [name, country, city]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string, example: Rome }
+        country: { type: string, example: Italy }
+        city: { type: string, example: Rome }
+        description: { type: string }
+        image_url: { type: string }
+        rating: { type: number, format: float, example: 4.8 }
+        price_from: { type: number, format: float, example: 1200 }
+        currency: { type: string, example: USD }
+        source: { type: string, readOnly: true }
+        external_id: { type: string, readOnly: true }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+    Tour:
+      type: object
+      required: [destination_id, title, price, duration_days]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        destination_id: { type: string, format: uuid }
+        title: { type: string, example: Rome Weekend }
+        description: { type: string }
+        price: { type: number, format: float, example: 500 }
+        currency: { type: string, example: USD }
+        duration_days: { type: integer, example: 3 }
+        start_date: { type: string, format: date-time }
+        end_date: { type: string, format: date-time }
+        available: { type: boolean, default: true }
+        image_url: { type: string }
+        source: { type: string, readOnly: true }
+        external_id: { type: string, readOnly: true }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+    Voucher:
+      type: object
+      required: [title, destination_id, price]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        title: { type: string, example: Summer Deal }
+        description: { type: string }
+        destination_id: { type: string, format: uuid }
+        price: { type: number, format: float, example: 900 }
+        currency: { type: string, example: USD }
+        duration_nights: { type: integer, example: 7 }
+        includes_flight: { type: boolean }
+        includes_hotel: { type: boolean }
+        includes_meal: { type: boolean }
+        image_url: { type: string }
+        is_active: { type: boolean, default: true }
+        created_at: { type: string, format: date-time, readOnly: true }
+    AddToCartRequest:
+      type: object
+      required: [tour_id, price]
+      properties:
+        tour_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, default: 1 }
+        price: { type: number, format: float, example: 500 }
+    UpdateCartItemRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 1, example: 2 }
+    CheckoutRequest:
+      type: object
+      required: [tour_id, destination_id, passenger_name, passenger_email]
+      properties:
+        tour_id: { type: string, format: uuid }
+        destination_id: { type: string, format: uuid }
+        passenger_name: { type: string, example: John Doe }
+        passenger_email: { type: string, format: email, example: user@example.com }
+        passenger_phone: { type: string, example: "+1234567890" }
+        travel_date: { type: string, format: date-time }
+        nights: { type: integer, minimum: 1, example: 5 }
+        adults: { type: integer, minimum: 1, example: 2 }
+        children: { type: integer, minimum: 0, example: 1 }
+    OrderStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, paid, cancelled, completed] }
+    CreatePaymentRequest:
+      type: object
+      required: [order_id, amount, provider]
+      properties:
+        order_id: { type: string, format: uuid }
+        amount: { type: number, format: float, example: 500 }
+        currency: { type: string, example: USD }
+        provider: { type: string, example: stripe }
+    CreateReviewRequest:
+      type: object
+      required: [tour_id, rating]
+      properties:
+        tour_id: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        comment: { type: string, example: Great tour }
+    Cart:
+      type: object
+      properties:
+        cart: { type: object }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              tour_id: { type: string, format: uuid }
+              quantity: { type: integer }
+              price_at_add: { type: number, format: float }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        tour_id: { type: string, format: uuid }
+        destination_id: { type: string, format: uuid }
+        status: { type: string }
+        total_price: { type: number, format: float }
+        currency: { type: string }
+        passenger_name: { type: string }
+        passenger_email: { type: string }
+        travel_date: { type: string, format: date-time }
+        nights: { type: integer }
+        adults: { type: integer }
+        children: { type: integer }
+    Payment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        amount: { type: number, format: float }
+        currency: { type: string }
+        status: { type: string, enum: [pending, success, failed] }
+        provider: { type: string }
+        transaction_id: { type: string }
+    Review:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tour_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        rating: { type: integer }
+        comment: { type: string }
+        created_at: { type: string, format: date-time }
+    SyncJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source: { type: string }
+        status: { type: string, enum: [pending, running, completed, failed] }
+        records: { type: integer }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+security:
+  - bearerAuth: []
+  - userHeader: []
 paths:
   /health:
     get:
       tags: [health]
       summary: Health check
+      security: []
       responses:
-        '200': { description: OK }
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Response' } } } }
   /api/v1/health:
     get:
       tags: [health]
-      summary: Health check
+      summary: Health check (versioned)
+      security: []
       responses:
         '200': { description: OK }
   /api/v1/destinations:
     get:
       tags: [destinations]
       summary: List destinations
+      security: []
       parameters:
-        - { in: query, name: country, schema: { type: string } }
-        - { in: query, name: city, schema: { type: string } }
-        - { in: query, name: page, schema: { type: integer, default: 1 } }
-        - { in: query, name: page_size, schema: { type: integer, default: 20 } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: city, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: List of destinations }
+        '200': { description: OK }
     post:
       tags: [destinations]
       summary: Create destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Destination' }
       responses:
         '201': { description: Created }
   /api/v1/destinations/search:
     get:
       tags: [destinations]
       summary: Search destinations
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: min_rating, in: query, schema: { type: number, format: float } }
+        - { name: max_price, in: query, schema: { type: number, format: float } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: Search results }
+        '200': { description: OK }
   /api/v1/destinations/top:
     get:
       tags: [destinations]
       summary: Top destinations
+      security: []
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 10 } }
       responses:
-        '200': { description: Top destinations }
+        '200': { description: OK }
   /api/v1/destinations/countries:
     get:
       tags: [destinations]
       summary: List countries
+      security: []
       responses:
-        '200': { description: Countries }
+        '200': { description: OK }
   /api/v1/destinations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     get:
       tags: [destinations]
       summary: Get destination
-      parameters:
-        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      security: []
       responses:
-        '200': { description: Destination }
+        '200': { description: OK }
+        '404': { description: Not found }
     put:
       tags: [destinations]
       summary: Update destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Destination' }
       responses:
-        '200': { description: Updated }
+        '200': { description: OK }
     delete:
       tags: [destinations]
       summary: Delete destination
       responses:
-        '200': { description: Deleted }
+        '200': { description: OK }
   /api/v1/tours:
     get:
       tags: [tours]
       summary: List tours
+      security: []
+      parameters:
+        - { name: destination_id, in: query, schema: { type: string, format: uuid } }
+        - { name: available, in: query, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: List of tours }
+        '200': { description: OK }
     post:
       tags: [tours]
       summary: Create tour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Tour' }
       responses:
         '201': { description: Created }
   /api/v1/tours/search:
     get:
       tags: [tours]
       summary: Search tours
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: destination_id, in: query, schema: { type: string, format: uuid } }
+        - { name: available, in: query, schema: { type: boolean } }
+        - { name: min_price, in: query, schema: { type: number, format: float } }
+        - { name: max_price, in: query, schema: { type: number, format: float } }
+        - { name: min_duration, in: query, schema: { type: integer } }
+        - { name: max_duration, in: query, schema: { type: integer } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: Search results }
+        '200': { description: OK }
   /api/v1/tours/featured:
     get:
       tags: [tours]
       summary: Featured tours
+      security: []
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 10 } }
       responses:
-        '200': { description: Featured tours }
+        '200': { description: OK }
   /api/v1/tours/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     get:
       tags: [tours]
       summary: Get tour
+      security: []
       responses:
-        '200': { description: Tour }
+        '200': { description: OK }
+        '404': { description: Not found }
     put:
       tags: [tours]
       summary: Update tour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Tour' }
       responses:
-        '200': { description: Updated }
+        '200': { description: OK }
     delete:
       tags: [tours]
       summary: Delete tour
       responses:
-        '200': { description: Deleted }
+        '200': { description: OK }
   /api/v1/events:
     get:
       tags: [events]
-      summary: List events
+      summary: Travel events
+      security: []
+      parameters:
+        - { name: aggregate, in: query, schema: { type: string } }
+        - { name: aggregate_id, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
       responses:
-        '200': { description: Events }
+        '200': { description: OK }
   /api/v1/sync:
     post:
       tags: [sync]
-      summary: Sync from MSP servers
+      summary: Sync all MSP and public sources
       responses:
-        '200': { description: Sync started }
+        '200': { description: Sync completed }
   /api/v1/sync/jobs:
     get:
       tags: [sync]
       summary: List sync jobs
       responses:
-        '200': { description: Sync jobs }
+        '200': { description: OK }
   /api/v1/auth/register:
     post:
       tags: [auth]
-      summary: Register
+      summary: Register user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
       responses:
-        '201': { description: Registered }
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthResponse' }
   /api/v1/auth/login:
     post:
       tags: [auth]
       summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
-        '200': { description: Logged in }
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { description: Invalid credentials }
   /api/v1/auth/me:
     get:
       tags: [auth]
-      summary: Current user
+      summary: Current user from headers or token
       responses:
-        '200': { description: User info }
+        '200': { description: OK }
   /api/v1/auth/profile:
     get:
       tags: [auth]
       summary: Get profile
       responses:
-        '200': { description: Profile }
+        '200': { description: OK }
     put:
       tags: [auth]
       summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
       responses:
-        '200': { description: Updated }
+        '200': { description: OK }
+  /api/v1/auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid old password }
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh token
+      responses:
+        '200': { description: OK }
   /api/v1/cart:
     get:
       tags: [cart]
       summary: Get cart
       responses:
-        '200': { description: Cart }
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Cart' }
   /api/v1/cart/add:
     post:
       tags: [cart]
-      summary: Add to cart
+      summary: Add tour to cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddToCartRequest' }
       responses:
-        '200': { description: Added }
+        '200': { description: OK }
   /api/v1/cart/item/{item_id}:
+    parameters:
+      - $ref: '#/components/parameters/ItemIdPath'
+    put:
+      tags: [cart]
+      summary: Update cart item quantity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCartItemRequest' }
+      responses:
+        '200': { description: OK }
     delete:
       tags: [cart]
       summary: Remove cart item
       responses:
-        '200': { description: Removed }
-    put:
-      tags: [cart]
-      summary: Update cart item
-      responses:
-        '200': { description: Updated }
+        '200': { description: OK }
   /api/v1/cart/checkout:
     post:
       tags: [cart]
-      summary: Checkout
+      summary: Checkout cart into order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckoutRequest' }
       responses:
-        '200': { description: Order created }
+        '201': { description: Order created }
   /api/v1/cart/clear:
     post:
       tags: [cart]
       summary: Clear cart
       responses:
-        '200': { description: Cleared }
+        '200': { description: OK }
   /api/v1/orders:
     get:
       tags: [orders]
-      summary: List orders
+      summary: List current user orders
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: Orders }
+        '200': { description: OK }
   /api/v1/orders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     get:
       tags: [orders]
       summary: Get order
       responses:
-        '200': { description: Order }
+        '200': { description: OK }
+        '404': { description: Not found }
   /api/v1/orders/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     post:
       tags: [orders]
       summary: Cancel order
       responses:
-        '200': { description: Cancelled }
+        '200': { description: OK }
   /api/v1/orders/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     put:
       tags: [orders]
       summary: Update order status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderStatusRequest' }
       responses:
-        '200': { description: Updated }
+        '200': { description: OK }
   /api/v1/payments:
     post:
       tags: [payments]
       summary: Create payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePaymentRequest' }
       responses:
         '201': { description: Created }
   /api/v1/payments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     get:
       tags: [payments]
       summary: Get payment
       responses:
-        '200': { description: Payment }
+        '200': { description: OK }
   /api/v1/payments/order/{order_id}:
+    parameters:
+      - $ref: '#/components/parameters/OrderIdPath'
     get:
       tags: [payments]
-      summary: Payments by order
+      summary: Get payments by order
       responses:
-        '200': { description: Payments }
+        '200': { description: OK }
   /api/v1/payments/{id}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     post:
       tags: [payments]
       summary: Confirm payment
       responses:
-        '200': { description: Confirmed }
+        '200': { description: OK }
   /api/v1/reviews:
     post:
       tags: [reviews]
       summary: Add review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReviewRequest' }
       responses:
         '201': { description: Created }
   /api/v1/reviews/tour/{tour_id}:
+    parameters:
+      - $ref: '#/components/parameters/TourIdPath'
     get:
       tags: [reviews]
-      summary: List reviews
+      summary: List reviews for tour
+      security: []
       responses:
-        '200': { description: Reviews }
+        '200': { description: OK }
   /api/v1/reviews/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     delete:
       tags: [reviews]
       summary: Delete review
       responses:
-        '200': { description: Deleted }
+        '200': { description: OK }
   /api/v1/vouchers:
     get:
       tags: [vouchers]
       summary: List vouchers
+      security: []
+      parameters:
+        - { name: destination_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        '200': { description: Vouchers }
+        '200': { description: OK }
     post:
       tags: [vouchers]
       summary: Create voucher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Voucher' }
       responses:
         '201': { description: Created }
   /api/v1/vouchers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
     get:
       tags: [vouchers]
       summary: Get voucher
+      security: []
       responses:
-        '200': { description: Voucher }
+        '200': { description: OK }
     put:
       tags: [vouchers]
       summary: Update voucher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Voucher' }
       responses:
-        '200': { description: Updated }
+        '200': { description: OK }
     delete:
       tags: [vouchers]
       summary: Delete voucher
       responses:
-        '200': { description: Deleted }
+        '200': { description: OK }
   /api/v1/admin/stats:
     get:
       tags: [admin]
-      summary: Admin stats
+      summary: Admin statistics
       responses:
-        '200': { description: Stats }
-  /api/v1/admin/users:
-    get:
-      tags: [admin]
-      summary: List users
-      responses:
-        '200': { description: Users }
-  /api/v1/admin/orders:
-    get:
-      tags: [admin]
-      summary: List orders
-      responses:
-        '200': { description: Orders }
+        '200': { description: OK }
   /api/v1/admin/sync:
     post:
       tags: [admin]
       summary: Trigger sync
       responses:
-        '200': { description: Triggered }
+        '200': { description: OK }
+  /api/v1/admin/users:
+    get:
+      tags: [admin]
+      summary: List users
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/orders:
+    get:
+      tags: [admin]
+      summary: List all orders
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/orders/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [admin]
+      summary: Update order status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderStatusRequest' }
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/destinations:
+    post:
+      tags: [admin]
+      summary: Create destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Destination' }
+      responses:
+        '201': { description: Created }
+  /api/v1/admin/tours:
+    post:
+      tags: [admin]
+      summary: Create tour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Tour' }
+      responses:
+        '201': { description: Created }
+  /api/v1/admin/vouchers:
+    post:
+      tags: [admin]
+      summary: Create voucher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Voucher' }
+      responses:
+        '201': { description: Created }
   /api/v1/admin/sync-jobs:
     get:
       tags: [admin]
-      summary: Sync jobs
+      summary: List sync jobs
       responses:
-        '200': { description: Jobs }
+        '200': { description: OK }
   /ws:
     get:
       tags: [realtime]
-      summary: WebSocket
+      summary: WebSocket geolocation
+      description: |
+        Upgrade to WebSocket. Query parameters: room, user_id, name.
+        Client messages:
+        {"type":"location","location":{"lat":55.75,"lng":37.62,"accuracy":5}}
+        {"type":"join","room":"global"}
+        {"type":"chat","message":"hello"}
+        Server messages: snapshot, presence, location.
+      security: []
+      parameters:
+        - { name: room, in: query, schema: { type: string, default: global } }
+        - { name: user_id, in: query, schema: { type: string, format: uuid } }
+        - { name: name, in: query, schema: { type: string } }
       responses:
-        '101': { description: Switching protocols }
-  /ws/events:
-    get:
-      tags: [realtime]
-      summary: WebSocket events
-      responses:
-        '101': { description: Switching protocols }
-components:
-  schemas:
-    Response:
-      type: object
-      properties:
-        success: { type: boolean }
-        data: { type: object, nullable: true }
-        error: { type: string, nullable: true }
-        meta: { type: object, nullable: true }
+        '101': { description: Switching Protocols }

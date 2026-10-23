@@ -128,7 +128,7 @@ func main() {
 	paymentH := handler.NewPaymentHandler(paymentSvc)
 	reviewH := handler.NewReviewHandler(reviewSvc)
 	voucherH := handler.NewVoucherHandler(voucherSvc)
-	adminH := handler.NewAdminHandler(repo, syncSvc)
+	adminH := handler.NewAdminHandler(repo, syncSvc, travelSvc, voucherSvc)
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())

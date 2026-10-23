@@ -27,8 +27,8 @@ func (h *ReviewHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type addReviewRequest struct {
-	TourID  string `json:"tour_id" validate:"required"`
-	Rating  int    `json:"rating" validate:"min=1,max=5"`
+	TourID  string `json:"tour_id" binding:"required"`
+	Rating  int    `json:"rating" binding:"min=1,max=5"`
 	Comment string `json:"comment"`
 }
 
@@ -88,4 +88,5 @@ func (h *ReviewHandler) list(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: reviews})
 }
+
 

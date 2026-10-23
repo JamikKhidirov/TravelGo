@@ -11,12 +11,14 @@ import (
 )
 
 type AdminHandler struct {
-	repo   *repository.TravelRepository
-	syncSvc *service.SyncService
+	repo       *repository.TravelRepository
+	syncSvc    *service.SyncService
+	travelSvc  *service.TravelService
+	voucherSvc *service.VoucherService
 }
 
-func NewAdminHandler(repo *repository.TravelRepository, syncSvc *service.SyncService) *AdminHandler {
-	return &AdminHandler{repo: repo, syncSvc: syncSvc}
+func NewAdminHandler(repo *repository.TravelRepository, syncSvc *service.SyncService, travelSvc *service.TravelService, voucherSvc *service.VoucherService) *AdminHandler {
+	return &AdminHandler{repo: repo, syncSvc: syncSvc, travelSvc: travelSvc, voucherSvc: voucherSvc}
 }
 
 func (h *AdminHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -108,15 +110,42 @@ func (h *AdminHandler) updateOrderStatus(c *gin.Context) {
 }
 
 func (h *AdminHandler) createDestination(c *gin.Context) {
-	c.JSON(http.StatusCreated, model.Response{Success: true, Data: gin.H{"message": "destination created"}})
+	var d model.Destination
+	if err := c.ShouldBindJSON(&d); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.travelSvc.CreateDestination(c.Request.Context(), &d); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, model.Response{Success: true, Data: d})
 }
 
 func (h *AdminHandler) createTour(c *gin.Context) {
-	c.JSON(http.StatusCreated, model.Response{Success: true, Data: gin.H{"message": "tour created"}})
+	var t model.Tour
+	if err := c.ShouldBindJSON(&t); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.travelSvc.CreateTour(c.Request.Context(), &t); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, model.Response{Success: true, Data: t})
 }
 
 func (h *AdminHandler) createVoucher(c *gin.Context) {
-	c.JSON(http.StatusCreated, model.Response{Success: true, Data: gin.H{"message": "voucher created"}})
+	var v model.Voucher
+	if err := c.ShouldBindJSON(&v); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.voucherSvc.CreateVoucher(c.Request.Context(), &v); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, model.Response{Success: true, Data: v})
 }
 
 func (h *AdminHandler) listSyncJobs(c *gin.Context) {
@@ -127,5 +156,7 @@ func (h *AdminHandler) listSyncJobs(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: jobs})
 }
+
+
 
 

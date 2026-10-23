@@ -33,17 +33,17 @@ func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type registerRequest struct {
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=6"`
-	FirstName string `json:"first_name" validate:"required"`
-	LastName  string `json:"last_name" validate:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
 	Phone     string `json:"phone"`
-	Role      string `json:"role" validate:"omitempty,oneof=user admin"`
+	Role      string `json:"role" binding:"omitempty,oneof=user admin"`
 }
 
 type loginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 func (h *AuthHandler) register(c *gin.Context) {
@@ -79,8 +79,11 @@ func (h *AuthHandler) login(c *gin.Context) {
 }
 
 func (h *AuthHandler) me(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID := userIDFromContext(c)
 	role, _ := c.Get("user_role")
+	if role == nil || role == "" {
+		role = "user"
+	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"user_id": userID, "role": role}})
 }
 
@@ -156,19 +159,10 @@ func (h *AuthHandler) updateProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	u, err := h.authSvc.GetUser(c.Request.Context(), userID)
+	u, err := h.authSvc.UpdateProfile(c.Request.Context(), userID, req.FirstName, req.LastName, req.Phone)
 	if err != nil {
 		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
 		return
-	}
-	if req.FirstName != "" {
-		u.FirstName = req.FirstName
-	}
-	if req.LastName != "" {
-		u.LastName = req.LastName
-	}
-	if req.Phone != "" {
-		u.Phone = req.Phone
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: u})
 }
@@ -194,9 +188,9 @@ func (h *CartHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type addToCartRequest struct {
-	TourID  string  `json:"tour_id" validate:"required"`
-	Quantity int    `json:"quantity" validate:"min=1"`
-	Price   float64 `json:"price" validate:"gt=0"`
+	TourID  string  `json:"tour_id" binding:"required"`
+	Quantity int    `json:"quantity" binding:"min=1"`
+	Price   float64 `json:"price" binding:"gt=0"`
 }
 
 func (h *CartHandler) list(c *gin.Context) {
@@ -303,14 +297,14 @@ func (h *CartHandler) updateItem(c *gin.Context) {
 }
 
 type checkoutRequest struct {
-	TourID         string    `json:"tour_id" validate:"required"`
-	DestinationID  string    `json:"destination_id" validate:"required"`
-	PassengerName  string    `json:"passenger_name" validate:"required"`
-	PassengerEmail string    `json:"passenger_email" validate:"required,email"`
+	TourID         string    `json:"tour_id" binding:"required"`
+	DestinationID  string    `json:"destination_id" binding:"required"`
+	PassengerName  string    `json:"passenger_name" binding:"required"`
+	PassengerEmail string    `json:"passenger_email" binding:"required,email"`
 	PassengerPhone string    `json:"passenger_phone"`
-	TravelDate     string    `json:"travel_date" validate:"required"`
-	Nights         int       `json:"nights" validate:"min=1"`
-	Adults         int       `json:"adults" validate:"min=1"`
+	TravelDate     string    `json:"travel_date" binding:"required"`
+	Nights         int       `json:"nights" binding:"min=1"`
+	Adults         int       `json:"adults" binding:"min=1"`
 	Children       int       `json:"children"`
 }
 
@@ -364,6 +358,7 @@ func userIDFromContext(c *gin.Context) string {
 	}
 	return ""
 }
+
 
 
 

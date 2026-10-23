@@ -28,8 +28,8 @@ func (h *PaymentHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type createPaymentRequest struct {
-	OrderID   string  `json:"order_id" validate:"required"`
-	Amount    float64 `json:"amount" validate:"gt=0"`
+	OrderID   string  `json:"order_id" binding:"required"`
+	Amount    float64 `json:"amount" binding:"gt=0"`
 	Currency  string  `json:"currency"`
 	Provider  string  `json:"provider"`
 }
@@ -99,3 +99,4 @@ func (h *PaymentHandler) confirm(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "payment confirmed"}})
 }
+

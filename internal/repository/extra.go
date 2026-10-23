@@ -606,3 +606,19 @@ func (r *TravelRepository) UpdateUserPassword(ctx context.Context, userID uuid.U
 	return err
 }
 
+
+
+func (r *TravelRepository) UpdateCartItemQuantity(ctx context.Context, cartID, itemID uuid.UUID, quantity int) error {
+	query := "UPDATE cart_items SET quantity = $1 WHERE id = $2 AND cart_id = $3"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), quantity, itemID, cartID)
+	return err
+}
+
+
+
+func (r *TravelRepository) UpdateUserProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) error {
+	query := "UPDATE users SET first_name = $1, last_name = $2, phone = $3, updated_at = NOW() WHERE id = $4"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), firstName, lastName, phone, userID)
+	return err
+}
+

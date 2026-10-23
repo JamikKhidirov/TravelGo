@@ -30,12 +30,12 @@ func (h *VoucherHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type createVoucherRequest struct {
-	Title           string  `json:"title" validate:"required"`
+	Title           string  `json:"title" binding:"required"`
 	Description     string  `json:"description"`
-	DestinationID   string  `json:"destination_id" validate:"required"`
-	Price           float64 `json:"price" validate:"gt=0"`
+	DestinationID   string  `json:"destination_id" binding:"required"`
+	Price           float64 `json:"price" binding:"gt=0"`
 	Currency        string  `json:"currency"`
-	DurationNights  int     `json:"duration_nights" validate:"min=1"`
+	DurationNights  int     `json:"duration_nights" binding:"min=1"`
 	IncludesFlight  bool    `json:"includes_flight"`
 	IncludesHotel   bool    `json:"includes_hotel"`
 	IncludesMeal    bool    `json:"includes_meal"`
@@ -159,4 +159,5 @@ func (h *VoucherHandler) delete(c *gin.Context) {
 }
 
 var _ = strconv.Itoa
+
 

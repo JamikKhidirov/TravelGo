@@ -235,10 +235,7 @@ func (s *AuthService) GetUser(ctx context.Context, id uuid.UUID) (*model.User, e
 	return s.repo.GetUserByID(ctx, id)
 }
 
-func (s *AuthService) UpdateProfile(ctx context.Context, u *model.User) error {
-	// minimal: reuse create? no update method. Return nil placeholder
-	return nil
-}
+
 
 
 
@@ -251,8 +248,11 @@ func (s *CartService) ClearCart(ctx context.Context, userID uuid.UUID) error {
 }
 
 func (s *CartService) UpdateCartItem(ctx context.Context, userID, itemID uuid.UUID, quantity int) error {
-	// minimal: not persisted separately; return nil
-	return nil
+	cart, err := s.GetOrCreateCart(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpdateCartItemQuantity(ctx, cart.ID, itemID, quantity)
 }
 
 
@@ -296,4 +296,28 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldP
 func (s *AuthService) RefreshToken(ctx context.Context, userID uuid.UUID, role string) (string, error) {
 	return s.generateToken(userID, role)
 }
+
+
+
+
+func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) (*model.User, error) {
+	u, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if firstName != "" {
+		u.FirstName = firstName
+	}
+	if lastName != "" {
+		u.LastName = lastName
+	}
+	if phone != "" {
+		u.Phone = phone
+	}
+	if err := s.repo.UpdateUserProfile(ctx, userID, u.FirstName, u.LastName, u.Phone); err != nil {
+		return nil, err
+	}
+	return s.repo.GetUserByID(ctx, userID)
+}
+
 
