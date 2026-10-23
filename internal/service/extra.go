@@ -276,3 +276,24 @@ func (s *ReviewService) ListReviews(ctx context.Context, tourID uuid.UUID) ([]mo
 func (s *VoucherService) ListVouchers(ctx context.Context, destID *uuid.UUID, p *model.Pagination) ([]model.Voucher, int, error) {
 	return s.repo.GetVouchers(ctx, destID, p)
 }
+
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
+	u, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(oldPassword)); err != nil {
+		return errors.New("invalid old password")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpdateUserPassword(ctx, userID, string(hash))
+}
+
+func (s *AuthService) RefreshToken(ctx context.Context, userID uuid.UUID, role string) (string, error) {
+	return s.generateToken(userID, role)
+}
+

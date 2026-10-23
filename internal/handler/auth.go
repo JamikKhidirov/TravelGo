@@ -27,6 +27,8 @@ func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
 		auth.GET("/me", h.me)
 		auth.GET("/profile", h.profile)
 		auth.PUT("/profile", h.updateProfile)
+		auth.POST("/change-password", h.changePassword)
+		auth.POST("/refresh", h.refresh)
 	}
 }
 
@@ -36,7 +38,7 @@ type registerRequest struct {
 	FirstName string `json:"first_name" validate:"required"`
 	LastName  string `json:"last_name" validate:"required"`
 	Phone     string `json:"phone"`
-	Role      string `json:"role" validate:"required,oneof=user admin"`
+	Role      string `json:"role" validate:"omitempty,oneof=user admin"`
 }
 
 type loginRequest struct {
@@ -50,7 +52,11 @@ func (h *AuthHandler) register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	u, token, err := h.authSvc.Register(c.Request.Context(), &model.LoginRequest{Email: req.Email, Password: req.Password}, req.FirstName, req.LastName, req.Phone, req.Role)
+	role := req.Role
+	if role == "" {
+		role = "user"
+	}
+	u, token, err := h.authSvc.Register(c.Request.Context(), &model.LoginRequest{Email: req.Email, Password: req.Password}, req.FirstName, req.LastName, req.Phone, role)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
@@ -91,6 +97,47 @@ func (h *AuthHandler) profile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: u})
+}
+
+func (h *AuthHandler) changePassword(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.authSvc.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "password changed"}})
+}
+
+func (h *AuthHandler) refresh(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	role, _ := c.Get("user_role")
+	if role == nil || role == "" {
+		role = "user"
+	}
+	token, err := h.authSvc.RefreshToken(c.Request.Context(), userID, role.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"token": token}})
 }
 
 func (h *AuthHandler) updateProfile(c *gin.Context) {

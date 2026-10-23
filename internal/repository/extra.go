@@ -598,3 +598,11 @@ func (r *TravelRepository) DistinctCountries(ctx context.Context) ([]string, err
 	return countries, nil
 }
 
+
+
+func (r *TravelRepository) UpdateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	query := "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), passwordHash, userID)
+	return err
+}
+

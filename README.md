@@ -314,3 +314,39 @@ docker-compose logs -f app   # посмотреть логи приложени�
 ## Лицензия
 MIT
 
+
+---
+
+## WebSocket Geolocation
+
+Connect to `ws://localhost:8080/ws?room=global&user_id=<uuid>&name=Traveler`.
+
+Client messages:
+```json
+{"type":"location","location":{"lat":55.7558,"lng":37.6173,"accuracy":12}}
+{"type":"join","room":"room-1"}
+{"type":"chat","message":"hello"}
+```
+
+Server broadcasts:
+```json
+{"type":"snapshot","room":"global","payload":[{"id":"...","user_id":"...","name":"Traveler","location":{"lat":0,"lng":0}}]}
+{"type":"presence","room":"global","payload":[...]}
+{"type":"location","room":"global","user_id":"...","name":"Traveler","location":{"lat":55.75,"lng":37.62}}
+```
+
+All connected clients in the same room receive location updates, enabling live map of travelers.
+
+## Authentication
+
+Use `Authorization: Bearer <token>` and `X-User-Id: <uuid>` headers for protected endpoints (cart, orders, reviews, profile).
+
+## Data Sources
+
+Sync collects from:
+- `mock_msp_server`
+- `msp2_server`
+- `cityapi_free` (public CityAPI, no key)
+
+Trigger with `POST /api/v1/sync`.
+

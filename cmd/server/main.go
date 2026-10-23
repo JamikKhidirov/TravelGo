@@ -15,6 +15,7 @@ import (
 	_ "github.com/lib/pq"
 	"go-travel/internal/adapter/mock"
 	"go-travel/internal/adapter/msp2"
+	scraper "go-travel/internal/adapter/scraper"
 	"go-travel/internal/broker"
 	"go-travel/internal/cache"
 	"go-travel/internal/config"
@@ -106,6 +107,7 @@ func main() {
 
 	mockSrc := mock.NewMockSource(cfg.Mock.BaseURL)
 	msp2Src := msp2.NewMSP2Source()
+	scraperSrc := scraper.NewCityAPISource()
 
 	travelSvc := service.NewTravelService(repo)
 	authSvc := service.NewAuthService(repo, "travel-secret")
@@ -114,7 +116,7 @@ func main() {
 	paymentSvc := service.NewPaymentService(repo)
 	reviewSvc := service.NewReviewService(repo)
 	voucherSvc := service.NewVoucherService(repo)
-	syncSvc := service.NewSyncService(repo, mockSrc, msp2Src)
+	syncSvc := service.NewSyncService(repo, mockSrc, msp2Src, scraperSrc)
 
 	_ = cacheStore
 	_ = eventBroker
