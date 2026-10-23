@@ -4,7 +4,7 @@ const swaggerSpec = `openapi: 3.0.3
 info:
   title: GoTravel API
   description: Travel service in Go. Aggregates destinations and tours from multiple MSP servers, stores data in PostgreSQL, caches in Redis, streams realtime geolocation over WebSocket and exposes REST endpoints.
-  version: 1.2.0
+  version: 1.3.0
 servers:
   - url: http://localhost:8080
     description: Local Docker
@@ -1019,3 +1019,4 @@ paths:
       responses:
         '101': { description: Switching Protocols }
 `
+
