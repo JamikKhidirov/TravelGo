@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"go-travel/internal/model"
 )
 
@@ -350,4 +349,252 @@ func (r *TravelRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*m
 	return &v, nil
 }
 
+func (r *TravelRepository) GetPaymentByID(ctx context.Context, id uuid.UUID) (*model.Payment, error) {
+	var p model.Payment
+	query := "SELECT * FROM payments WHERE id = $1"
+	if err := r.db.GetContext(ctx, &p, r.db.Rebind(query), id); err != nil {
+		return nil, fmt.Errorf("get payment: %w", err)
+	}
+	return &p, nil
+}
+
+func (r *TravelRepository) GetPaymentsByOrder(ctx context.Context, orderID uuid.UUID) ([]model.Payment, error) {
+	var payments []model.Payment
+	query := "SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC"
+	if err := r.db.SelectContext(ctx, &payments, r.db.Rebind(query), orderID); err != nil {
+		return nil, fmt.Errorf("get payments by order: %w", err)
+	}
+	return payments, nil
+}
+
+func (r *TravelRepository) UpdatePaymentStatus(ctx context.Context, id uuid.UUID, status, transactionID string) error {
+	query := "UPDATE payments SET status = $1, transaction_id = $2 WHERE id = $3"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), status, transactionID, id)
+	return err
+}
+
+func (r *TravelRepository) UpdateVoucher(ctx context.Context, v *model.Voucher) error {
+	query := `
+		UPDATE vouchers SET title = :title, description = :description, destination_id = :destination_id, price = :price, currency = :currency, duration_nights = :duration_nights, includes_flight = :includes_flight, includes_hotel = :includes_hotel, includes_meal = :includes_meal, image_url = :image_url, is_active = :is_active
+		WHERE id = :id
+	`
+	_, err := r.db.NamedExecContext(ctx, query, v)
+	return err
+}
+
+func (r *TravelRepository) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
+	query := "DELETE FROM vouchers WHERE id = $1"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), id)
+	return err
+}
+
+func (r *TravelRepository) UpdateDestination(ctx context.Context, d *model.Destination) error {
+	query := `
+		UPDATE destinations SET name = :name, country = :country, city = :city, description = :description, image_url = :image_url, rating = :rating, price_from = :price_from, currency = :currency, source = :source, external_id = :external_id, updated_at = NOW()
+		WHERE id = :id
+	`
+	_, err := r.db.NamedExecContext(ctx, query, d)
+	return err
+}
+
+func (r *TravelRepository) DeleteDestination(ctx context.Context, id uuid.UUID) error {
+	query := "DELETE FROM destinations WHERE id = $1"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), id)
+	return err
+}
+
+func (r *TravelRepository) UpdateTour(ctx context.Context, t *model.Tour) error {
+	query := `
+		UPDATE tours SET destination_id = :destination_id, title = :title, description = :description, price = :price, currency = :currency, duration_days = :duration_days, start_date = :start_date, end_date = :end_date, available = :available, image_url = :image_url, source = :source, external_id = :external_id, updated_at = NOW()
+		WHERE id = :id
+	`
+	_, err := r.db.NamedExecContext(ctx, query, t)
+	return err
+}
+
+func (r *TravelRepository) DeleteTour(ctx context.Context, id uuid.UUID) error {
+	query := "DELETE FROM tours WHERE id = $1"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), id)
+	return err
+}
+
+func (r *TravelRepository) ListUsers(ctx context.Context, p *model.Pagination) ([]model.User, int, error) {
+	var users []model.User
+	query := "SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+	if err := r.db.SelectContext(ctx, &users, r.db.Rebind(query), p.Limit(), p.Offset()); err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM users"); err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+	return users, total, nil
+}
+
+func (r *TravelRepository) ListAllOrders(ctx context.Context, p *model.Pagination) ([]model.Order, int, error) {
+	var orders []model.Order
+	query := "SELECT * FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+	if err := r.db.SelectContext(ctx, &orders, r.db.Rebind(query), p.Limit(), p.Offset()); err != nil {
+		return nil, 0, fmt.Errorf("list orders: %w", err)
+	}
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM orders"); err != nil {
+		return nil, 0, fmt.Errorf("count orders: %w", err)
+	}
+	return orders, total, nil
+}
+
+func (r *TravelRepository) CountDestinations(ctx context.Context) (int, error) {
+	var n int
+	err := r.db.GetContext(ctx, &n, "SELECT COUNT(*) FROM destinations")
+	return n, err
+}
+
+func (r *TravelRepository) CountTours(ctx context.Context) (int, error) {
+	var n int
+	err := r.db.GetContext(ctx, &n, "SELECT COUNT(*) FROM tours")
+	return n, err
+}
+
+func (r *TravelRepository) CountUsers(ctx context.Context) (int, error) {
+	var n int
+	err := r.db.GetContext(ctx, &n, "SELECT COUNT(*) FROM users")
+	return n, err
+}
+
+func (r *TravelRepository) CountOrders(ctx context.Context) (int, error) {
+	var n int
+	err := r.db.GetContext(ctx, &n, "SELECT COUNT(*) FROM orders")
+	return n, err
+}
+
+func (r *TravelRepository) SumRevenue(ctx context.Context) (float64, error) {
+	var sum float64
+	err := r.db.GetContext(ctx, &sum, "SELECT COALESCE(SUM(total_price),0) FROM orders WHERE status IN ('paid','completed')")
+	return sum, err
+}
+
+func (r *TravelRepository) GetSyncJobs(ctx context.Context, limit int) ([]model.SyncJob, error) {
+	var jobs []model.SyncJob
+	query := "SELECT * FROM sync_jobs ORDER BY created_at DESC LIMIT $1"
+	if err := r.db.SelectContext(ctx, &jobs, r.db.Rebind(query), limit); err != nil {
+		return nil, fmt.Errorf("get sync jobs: %w", err)
+	}
+	return jobs, nil
+}
+
+func (r *TravelRepository) DeleteReview(ctx context.Context, id uuid.UUID) error {
+	query := "DELETE FROM reviews WHERE id = $1"
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), id)
+	return err
+}
+
+func (r *TravelRepository) SearchDestinations(ctx context.Context, q, country, city string, minRating, maxPrice float64, p *model.Pagination) ([]model.Destination, int, error) {
+	var destinations []model.Destination
+	where := "WHERE 1=1"
+	var args []interface{}
+	argIdx := 1
+	if q != "" {
+		where += fmt.Sprintf(" AND (name ILIKE $%d OR country ILIKE $%d OR city ILIKE $%d OR description ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
+		args = append(args, "%"+q+"%")
+		argIdx++
+	}
+	if country != "" {
+		where += fmt.Sprintf(" AND country = $%d", argIdx)
+		args = append(args, country)
+		argIdx++
+	}
+	if city != "" {
+		where += fmt.Sprintf(" AND city = $%d", argIdx)
+		args = append(args, city)
+		argIdx++
+	}
+	if minRating > 0 {
+		where += fmt.Sprintf(" AND rating >= $%d", argIdx)
+		args = append(args, minRating)
+		argIdx++
+	}
+	if maxPrice > 0 {
+		where += fmt.Sprintf(" AND price_from <= $%d", argIdx)
+		args = append(args, maxPrice)
+		argIdx++
+	}
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM destinations %s", where)
+	var total int
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args...); err != nil {
+		return nil, 0, fmt.Errorf("count destinations: %w", err)
+	}
+	query := fmt.Sprintf("SELECT * FROM destinations %s ORDER BY rating DESC, created_at DESC LIMIT $%d OFFSET $%d", where, argIdx, argIdx+1)
+	args = append(args, p.Limit(), p.Offset())
+	if err := r.db.SelectContext(ctx, &destinations, r.db.Rebind(query), args...); err != nil {
+		return nil, 0, fmt.Errorf("search destinations: %w", err)
+	}
+	return destinations, total, nil
+}
+
+func (r *TravelRepository) SearchTours(ctx context.Context, q string, destID *uuid.UUID, available *bool, minPrice, maxPrice float64, minDuration, maxDuration int, p *model.Pagination) ([]model.Tour, int, error) {
+	var tours []model.Tour
+	where := "WHERE 1=1"
+	var args []interface{}
+	argIdx := 1
+	if q != "" {
+		where += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argIdx, argIdx)
+		args = append(args, "%"+q+"%")
+		argIdx++
+	}
+	if destID != nil {
+		where += fmt.Sprintf(" AND destination_id = $%d", argIdx)
+		args = append(args, *destID)
+		argIdx++
+	}
+	if available != nil {
+		where += fmt.Sprintf(" AND available = $%d", argIdx)
+		args = append(args, *available)
+		argIdx++
+	}
+	if minPrice > 0 {
+		where += fmt.Sprintf(" AND price >= $%d", argIdx)
+		args = append(args, minPrice)
+		argIdx++
+	}
+	if maxPrice > 0 {
+		where += fmt.Sprintf(" AND price <= $%d", argIdx)
+		args = append(args, maxPrice)
+		argIdx++
+	}
+	if minDuration > 0 {
+		where += fmt.Sprintf(" AND duration_days >= $%d", argIdx)
+		args = append(args, minDuration)
+		argIdx++
+	}
+	if maxDuration > 0 {
+		where += fmt.Sprintf(" AND duration_days <= $%d", argIdx)
+		args = append(args, maxDuration)
+		argIdx++
+	}
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM tours %s", where)
+	var total int
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args...); err != nil {
+		return nil, 0, fmt.Errorf("count tours: %w", err)
+	}
+	query := fmt.Sprintf("SELECT * FROM tours %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", where, argIdx, argIdx+1)
+	args = append(args, p.Limit(), p.Offset())
+	if err := r.db.SelectContext(ctx, &tours, r.db.Rebind(query), args...); err != nil {
+		return nil, 0, fmt.Errorf("search tours: %w", err)
+	}
+	return tours, total, nil
+}
+
 var _ = time.Now
+
+
+
+func (r *TravelRepository) DistinctCountries(ctx context.Context) ([]string, error) {
+	var countries []string
+	query := "SELECT DISTINCT country FROM destinations ORDER BY country"
+	if err := r.db.SelectContext(ctx, &countries, query); err != nil {
+		return nil, err
+	}
+	return countries, nil
+}
+

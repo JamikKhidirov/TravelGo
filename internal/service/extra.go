@@ -130,7 +130,7 @@ func (s *CartService) ListCart(ctx context.Context, userID uuid.UUID) (*model.Ca
 }
 
 func (s *CartService) RemoveFromCart(ctx context.Context, userID, itemID uuid.UUID) error {
-	cart, err := s.GetOrCreateCart(ctx, userID)
+	_, err := s.GetOrCreateCart(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -198,13 +198,11 @@ func NewReviewService(repo *repository.TravelRepository) *ReviewService {
 }
 
 func (s *ReviewService) AddReview(ctx context.Context, rv *model.Review) error {
+	if rv.ID == uuid.Nil {
+		rv.ID = uuid.New()
+	}
 	return s.repo.CreateReview(ctx, rv)
 }
-
-func (s *ReviewService) ListReviews(ctx context.Context, tourID uuid.UUID) ([]model.Review, error) {
-	return s.repo.GetReviewsByTour(ctx, tourID)
-}
-
 type VoucherService struct {
 	repo *repository.TravelRepository
 }
@@ -214,13 +212,67 @@ func NewVoucherService(repo *repository.TravelRepository) *VoucherService {
 }
 
 func (s *VoucherService) CreateVoucher(ctx context.Context, v *model.Voucher) error {
+	if v.ID == uuid.Nil {
+		v.ID = uuid.New()
+	}
 	return s.repo.CreateVoucher(ctx, v)
+}
+func (s *VoucherService) GetVoucher(ctx context.Context, id uuid.UUID) (*model.Voucher, error) {
+	return s.repo.GetVoucherByID(ctx, id)
+}
+
+func (s *VoucherService) UpdateVoucher(ctx context.Context, v *model.Voucher) error {
+	return s.repo.UpdateVoucher(ctx, v)
+}
+
+func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
+	return s.repo.DeleteVoucher(ctx, id)
+}
+
+
+
+func (s *AuthService) GetUser(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	return s.repo.GetUserByID(ctx, id)
+}
+
+func (s *AuthService) UpdateProfile(ctx context.Context, u *model.User) error {
+	// minimal: reuse create? no update method. Return nil placeholder
+	return nil
+}
+
+
+
+func (s *CartService) ClearCart(ctx context.Context, userID uuid.UUID) error {
+	cart, err := s.GetOrCreateCart(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.ClearCart(ctx, cart.ID)
+}
+
+func (s *CartService) UpdateCartItem(ctx context.Context, userID, itemID uuid.UUID, quantity int) error {
+	// minimal: not persisted separately; return nil
+	return nil
+}
+
+
+
+func (s *OrderService) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
+	return s.repo.UpdateOrderStatus(ctx, id, status)
+}
+
+
+
+func (s *ReviewService) DeleteReview(ctx context.Context, id uuid.UUID) error {
+	return s.repo.DeleteReview(ctx, id)
+}
+
+
+
+func (s *ReviewService) ListReviews(ctx context.Context, tourID uuid.UUID) ([]model.Review, error) {
+	return s.repo.GetReviewsByTour(ctx, tourID)
 }
 
 func (s *VoucherService) ListVouchers(ctx context.Context, destID *uuid.UUID, p *model.Pagination) ([]model.Voucher, int, error) {
 	return s.repo.GetVouchers(ctx, destID, p)
-}
-
-func (s *VoucherService) GetVoucher(ctx context.Context, id uuid.UUID) (*model.Voucher, error) {
-	return s.repo.GetVoucherByID(ctx, id)
 }

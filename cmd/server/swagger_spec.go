@@ -1,0 +1,355 @@
+package main
+
+const swaggerSpec = `openapi: 3.0.3
+info:
+  title: GoTravel API
+  description: Travel microservice written in Go. Collects data from multiple MSP servers, stores in PostgreSQL, caches in Redis, streams events, exposes REST + WebSocket endpoints.
+  version: 1.1.0
+servers:
+  - url: http://localhost:8080
+  - url: http://travel-app:8080
+tags:
+  - name: health
+  - name: destinations
+  - name: tours
+  - name: events
+  - name: sync
+  - name: auth
+  - name: cart
+  - name: orders
+  - name: payments
+  - name: reviews
+  - name: vouchers
+  - name: admin
+  - name: realtime
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/v1/destinations:
+    get:
+      tags: [destinations]
+      summary: List destinations
+      parameters:
+        - { in: query, name: country, schema: { type: string } }
+        - { in: query, name: city, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: List of destinations }
+    post:
+      tags: [destinations]
+      summary: Create destination
+      responses:
+        '201': { description: Created }
+  /api/v1/destinations/search:
+    get:
+      tags: [destinations]
+      summary: Search destinations
+      responses:
+        '200': { description: Search results }
+  /api/v1/destinations/top:
+    get:
+      tags: [destinations]
+      summary: Top destinations
+      responses:
+        '200': { description: Top destinations }
+  /api/v1/destinations/countries:
+    get:
+      tags: [destinations]
+      summary: List countries
+      responses:
+        '200': { description: Countries }
+  /api/v1/destinations/{id}:
+    get:
+      tags: [destinations]
+      summary: Get destination
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Destination }
+    put:
+      tags: [destinations]
+      summary: Update destination
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [destinations]
+      summary: Delete destination
+      responses:
+        '200': { description: Deleted }
+  /api/v1/tours:
+    get:
+      tags: [tours]
+      summary: List tours
+      responses:
+        '200': { description: List of tours }
+    post:
+      tags: [tours]
+      summary: Create tour
+      responses:
+        '201': { description: Created }
+  /api/v1/tours/search:
+    get:
+      tags: [tours]
+      summary: Search tours
+      responses:
+        '200': { description: Search results }
+  /api/v1/tours/featured:
+    get:
+      tags: [tours]
+      summary: Featured tours
+      responses:
+        '200': { description: Featured tours }
+  /api/v1/tours/{id}:
+    get:
+      tags: [tours]
+      summary: Get tour
+      responses:
+        '200': { description: Tour }
+    put:
+      tags: [tours]
+      summary: Update tour
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [tours]
+      summary: Delete tour
+      responses:
+        '200': { description: Deleted }
+  /api/v1/events:
+    get:
+      tags: [events]
+      summary: List events
+      responses:
+        '200': { description: Events }
+  /api/v1/sync:
+    post:
+      tags: [sync]
+      summary: Sync from MSP servers
+      responses:
+        '200': { description: Sync started }
+  /api/v1/sync/jobs:
+    get:
+      tags: [sync]
+      summary: List sync jobs
+      responses:
+        '200': { description: Sync jobs }
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register
+      responses:
+        '201': { description: Registered }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Login
+      responses:
+        '200': { description: Logged in }
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user
+      responses:
+        '200': { description: User info }
+  /api/v1/auth/profile:
+    get:
+      tags: [auth]
+      summary: Get profile
+      responses:
+        '200': { description: Profile }
+    put:
+      tags: [auth]
+      summary: Update profile
+      responses:
+        '200': { description: Updated }
+  /api/v1/cart:
+    get:
+      tags: [cart]
+      summary: Get cart
+      responses:
+        '200': { description: Cart }
+  /api/v1/cart/add:
+    post:
+      tags: [cart]
+      summary: Add to cart
+      responses:
+        '200': { description: Added }
+  /api/v1/cart/item/{item_id}:
+    delete:
+      tags: [cart]
+      summary: Remove cart item
+      responses:
+        '200': { description: Removed }
+    put:
+      tags: [cart]
+      summary: Update cart item
+      responses:
+        '200': { description: Updated }
+  /api/v1/cart/checkout:
+    post:
+      tags: [cart]
+      summary: Checkout
+      responses:
+        '200': { description: Order created }
+  /api/v1/cart/clear:
+    post:
+      tags: [cart]
+      summary: Clear cart
+      responses:
+        '200': { description: Cleared }
+  /api/v1/orders:
+    get:
+      tags: [orders]
+      summary: List orders
+      responses:
+        '200': { description: Orders }
+  /api/v1/orders/{id}:
+    get:
+      tags: [orders]
+      summary: Get order
+      responses:
+        '200': { description: Order }
+  /api/v1/orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Cancel order
+      responses:
+        '200': { description: Cancelled }
+  /api/v1/orders/{id}/status:
+    put:
+      tags: [orders]
+      summary: Update order status
+      responses:
+        '200': { description: Updated }
+  /api/v1/payments:
+    post:
+      tags: [payments]
+      summary: Create payment
+      responses:
+        '201': { description: Created }
+  /api/v1/payments/{id}:
+    get:
+      tags: [payments]
+      summary: Get payment
+      responses:
+        '200': { description: Payment }
+  /api/v1/payments/order/{order_id}:
+    get:
+      tags: [payments]
+      summary: Payments by order
+      responses:
+        '200': { description: Payments }
+  /api/v1/payments/{id}/confirm:
+    post:
+      tags: [payments]
+      summary: Confirm payment
+      responses:
+        '200': { description: Confirmed }
+  /api/v1/reviews:
+    post:
+      tags: [reviews]
+      summary: Add review
+      responses:
+        '201': { description: Created }
+  /api/v1/reviews/tour/{tour_id}:
+    get:
+      tags: [reviews]
+      summary: List reviews
+      responses:
+        '200': { description: Reviews }
+  /api/v1/reviews/{id}:
+    delete:
+      tags: [reviews]
+      summary: Delete review
+      responses:
+        '200': { description: Deleted }
+  /api/v1/vouchers:
+    get:
+      tags: [vouchers]
+      summary: List vouchers
+      responses:
+        '200': { description: Vouchers }
+    post:
+      tags: [vouchers]
+      summary: Create voucher
+      responses:
+        '201': { description: Created }
+  /api/v1/vouchers/{id}:
+    get:
+      tags: [vouchers]
+      summary: Get voucher
+      responses:
+        '200': { description: Voucher }
+    put:
+      tags: [vouchers]
+      summary: Update voucher
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [vouchers]
+      summary: Delete voucher
+      responses:
+        '200': { description: Deleted }
+  /api/v1/admin/stats:
+    get:
+      tags: [admin]
+      summary: Admin stats
+      responses:
+        '200': { description: Stats }
+  /api/v1/admin/users:
+    get:
+      tags: [admin]
+      summary: List users
+      responses:
+        '200': { description: Users }
+  /api/v1/admin/orders:
+    get:
+      tags: [admin]
+      summary: List orders
+      responses:
+        '200': { description: Orders }
+  /api/v1/admin/sync:
+    post:
+      tags: [admin]
+      summary: Trigger sync
+      responses:
+        '200': { description: Triggered }
+  /api/v1/admin/sync-jobs:
+    get:
+      tags: [admin]
+      summary: Sync jobs
+      responses:
+        '200': { description: Jobs }
+  /ws:
+    get:
+      tags: [realtime]
+      summary: WebSocket
+      responses:
+        '101': { description: Switching protocols }
+  /ws/events:
+    get:
+      tags: [realtime]
+      summary: WebSocket events
+      responses:
+        '101': { description: Switching protocols }
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: { type: object, nullable: true }
+        error: { type: string, nullable: true }
+        meta: { type: object, nullable: true }
+`

@@ -1,3 +1,7 @@
+![CI](https://github.com/anomalyco/GoTravel/actions/workflows/ci.yml/badge.svg)
+![Go](https://img.shields.io/badge/Go-1.22-blue)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED)
+
 # GoTravel — Travel Microservice (Go)
 
 Микросервис для сбора и выдачи данных о путешествиях на языке **Go**.  
@@ -309,3 +313,4 @@ docker-compose logs -f app   # посмотреть логи приложени�
 
 ## Лицензия
 MIT
+

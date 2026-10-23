@@ -119,27 +119,28 @@ func (r *TravelRepository) GetDestinations(ctx context.Context, country, city st
 	var destinations []model.Destination
 
 	where := "WHERE 1=1"
-	args := map[string]interface{}{}
+	var args []interface{}
+	argIdx := 1
 	if country != "" {
-		where += " AND country = :country"
-		args["country"] = country
+		where += fmt.Sprintf(" AND country = $%d", argIdx)
+		args = append(args, country)
+		argIdx++
 	}
 	if city != "" {
-		where += " AND city = :city"
-		args["city"] = city
+		where += fmt.Sprintf(" AND city = $%d", argIdx)
+		args = append(args, city)
+		argIdx++
 	}
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM destinations %s", where)
 	var total int
-	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args); err != nil {
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args...); err != nil {
 		return nil, 0, fmt.Errorf("count destinations: %w", err)
 	}
 
-	query := fmt.Sprintf("SELECT * FROM destinations %s ORDER BY created_at DESC LIMIT :limit OFFSET :offset", where)
-	args["limit"] = p.Limit()
-	args["offset"] = p.Offset()
-
-	if err := r.db.SelectContext(ctx, &destinations, r.db.Rebind(query), args); err != nil {
+	query := fmt.Sprintf("SELECT * FROM destinations %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", where, argIdx, argIdx+1)
+	args = append(args, p.Limit(), p.Offset())
+	if err := r.db.SelectContext(ctx, &destinations, r.db.Rebind(query), args...); err != nil {
 		return nil, 0, fmt.Errorf("select destinations: %w", err)
 	}
 
@@ -188,27 +189,28 @@ func (r *TravelRepository) GetTours(ctx context.Context, destID *uuid.UUID, avai
 	var tours []model.Tour
 
 	where := "WHERE 1=1"
-	args := map[string]interface{}{}
+	var args []interface{}
+	argIdx := 1
 	if destID != nil {
-		where += " AND destination_id = :dest_id"
-		args["dest_id"] = *destID
+		where += fmt.Sprintf(" AND destination_id = $%d", argIdx)
+		args = append(args, *destID)
+		argIdx++
 	}
 	if available != nil {
-		where += " AND available = :available"
-		args["available"] = *available
+		where += fmt.Sprintf(" AND available = $%d", argIdx)
+		args = append(args, *available)
+		argIdx++
 	}
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM tours %s", where)
 	var total int
-	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args); err != nil {
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(countQuery), args...); err != nil {
 		return nil, 0, fmt.Errorf("count tours: %w", err)
 	}
 
-	query := fmt.Sprintf("SELECT * FROM tours %s ORDER BY created_at DESC LIMIT :limit OFFSET :offset", where)
-	args["limit"] = p.Limit()
-	args["offset"] = p.Offset()
-
-	if err := r.db.SelectContext(ctx, &tours, r.db.Rebind(query), args); err != nil {
+	query := fmt.Sprintf("SELECT * FROM tours %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", where, argIdx, argIdx+1)
+	args = append(args, p.Limit(), p.Offset())
+	if err := r.db.SelectContext(ctx, &tours, r.db.Rebind(query), args...); err != nil {
 		return nil, 0, fmt.Errorf("select tours: %w", err)
 	}
 

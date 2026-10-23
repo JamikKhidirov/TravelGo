@@ -13,12 +13,13 @@ import (
 )
 
 type TravelHandler struct {
-	svc *service.TravelService
-	val *validator.Validate
+	svc     *service.TravelService
+	syncSvc *service.SyncService
+	val     *validator.Validate
 }
 
-func NewTravelHandler(svc *service.TravelService) *TravelHandler {
-	return &TravelHandler{svc: svc, val: validator.New()}
+func NewTravelHandler(svc *service.TravelService, syncSvc *service.SyncService) *TravelHandler {
+	return &TravelHandler{svc: svc, syncSvc: syncSvc, val: validator.New()}
 }
 
 type paginationResponse struct {
@@ -33,13 +34,23 @@ func (h *TravelHandler) RegisterRoutes(r *gin.Engine) {
 	{
 		api.GET("/health", h.health)
 		api.GET("/destinations", h.listDestinations)
+		api.GET("/destinations/search", h.searchDestinations)
+		api.GET("/destinations/top", h.topDestinations)
+		api.GET("/destinations/countries", h.listCountries)
 		api.GET("/destinations/:id", h.getDestination)
 		api.POST("/destinations", h.createDestination)
+		api.PUT("/destinations/:id", h.updateDestination)
+		api.DELETE("/destinations/:id", h.deleteDestination)
 		api.GET("/tours", h.listTours)
+		api.GET("/tours/search", h.searchTours)
+		api.GET("/tours/featured", h.featuredTours)
 		api.GET("/tours/:id", h.getTour)
 		api.POST("/tours", h.createTour)
+		api.PUT("/tours/:id", h.updateTour)
+		api.DELETE("/tours/:id", h.deleteTour)
 		api.GET("/events", h.listEvents)
 		api.POST("/sync", h.sync)
+		api.GET("/sync/jobs", h.listSyncJobs)
 	}
 }
 
@@ -198,8 +209,15 @@ func (h *TravelHandler) listEvents(c *gin.Context) {
 }
 
 func (h *TravelHandler) sync(c *gin.Context) {
-	// placeholder handled by sync handler
-	c.JSON(http.StatusNotImplemented, model.Response{Success: false, Error: "use /api/v1/sync"})
+	if h.syncSvc == nil {
+		c.JSON(http.StatusNotImplemented, model.Response{Success: false, Error: "sync not configured"})
+		return
+	}
+	if err := h.syncSvc.SyncAll(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "sync completed"}})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

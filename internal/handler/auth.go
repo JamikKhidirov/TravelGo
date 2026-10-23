@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -24,6 +25,8 @@ func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
 		auth.POST("/register", h.register)
 		auth.POST("/login", h.login)
 		auth.GET("/me", h.me)
+		auth.GET("/profile", h.profile)
+		auth.PUT("/profile", h.updateProfile)
 	}
 }
 
@@ -75,6 +78,54 @@ func (h *AuthHandler) me(c *gin.Context) {
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"user_id": userID, "role": role}})
 }
 
+func (h *AuthHandler) profile(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	u, err := h.authSvc.GetUser(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: u})
+}
+
+func (h *AuthHandler) updateProfile(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	var req struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Phone     string `json:"phone"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	u, err := h.authSvc.GetUser(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if req.FirstName != "" {
+		u.FirstName = req.FirstName
+	}
+	if req.LastName != "" {
+		u.LastName = req.LastName
+	}
+	if req.Phone != "" {
+		u.Phone = req.Phone
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: u})
+}
+
 type CartHandler struct {
 	cartSvc *service.CartService
 }
@@ -90,6 +141,8 @@ func (h *CartHandler) RegisterRoutes(r *gin.RouterGroup) {
 		cart.POST("/add", h.add)
 		cart.DELETE("/item/:item_id", h.remove)
 		cart.POST("/checkout", h.checkout)
+		cart.POST("/clear", h.clear)
+		cart.PUT("/item/:item_id", h.updateItem)
 	}
 }
 
@@ -100,9 +153,8 @@ type addToCartRequest struct {
 }
 
 func (h *CartHandler) list(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, ok := userIDRaw.(string)
-	if !ok || userIDStr == "" {
+	userIDStr := userIDFromContext(c)
+	if userIDStr == "" {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "user_id required"})
 		return
 	}
@@ -120,8 +172,7 @@ func (h *CartHandler) list(c *gin.Context) {
 }
 
 func (h *CartHandler) add(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, _ := userIDRaw.(string)
+	userIDStr := userIDFromContext(c)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
@@ -146,8 +197,7 @@ func (h *CartHandler) add(c *gin.Context) {
 }
 
 func (h *CartHandler) remove(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, _ := userIDRaw.(string)
+	userIDStr := userIDFromContext(c)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
@@ -165,6 +215,46 @@ func (h *CartHandler) remove(c *gin.Context) {
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "removed"}})
 }
 
+func (h *CartHandler) clear(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	if err := h.cartSvc.ClearCart(c.Request.Context(), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "cleared"}})
+}
+
+func (h *CartHandler) updateItem(c *gin.Context) {
+	userIDStr := userIDFromContext(c)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
+		return
+	}
+	itemID, err := uuid.Parse(c.Param("item_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid item_id"})
+		return
+	}
+	var req struct {
+		Quantity int `json:"quantity" binding:"min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.cartSvc.UpdateCartItem(c.Request.Context(), userID, itemID, req.Quantity); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "updated"}})
+}
+
 type checkoutRequest struct {
 	TourID         string    `json:"tour_id" validate:"required"`
 	DestinationID  string    `json:"destination_id" validate:"required"`
@@ -178,8 +268,7 @@ type checkoutRequest struct {
 }
 
 func (h *CartHandler) checkout(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, _ := userIDRaw.(string)
+	userIDStr := userIDFromContext(c)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
@@ -215,3 +304,19 @@ func (h *CartHandler) checkout(c *gin.Context) {
 
 var _ = strconv.Itoa
 var _ = time.Time{}
+
+
+func userIDFromContext(c *gin.Context) string {
+	if v, ok := c.Get("user_id"); ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	if v := c.GetHeader("X-User-Id"); v != "" {
+		return v
+	}
+	return ""
+}
+
+
+

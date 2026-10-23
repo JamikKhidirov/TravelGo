@@ -26,12 +26,13 @@ func NewSyncService(repo *repository.TravelRepository, sources ...Source) *SyncS
 }
 
 func (s *SyncService) SyncAll(ctx context.Context) error {
+	var lastErr error
 	for _, src := range s.sources {
 		if err := s.syncSource(ctx, src); err != nil {
-			return err
+			lastErr = err
 		}
 	}
-	return nil
+	return lastErr
 }
 
 func (s *SyncService) syncSource(ctx context.Context, src Source) error {
@@ -53,11 +54,13 @@ func (s *SyncService) syncSource(ctx context.Context, src Source) error {
 		s.repo.UpdateSyncJob(ctx, job.ID, "failed", total, err.Error())
 		return fmt.Errorf("fetch destinations from %s: %w", src.Name(), err)
 	}
+	var destIDs []uuid.UUID
 	for _, d := range dests {
 		if err := s.repo.CreateDestination(ctx, &d); err != nil {
 			continue
 		}
 		total++
+		destIDs = append(destIDs, d.ID)
 	}
 
 	tours, err := src.FetchTours(ctx)
@@ -65,7 +68,10 @@ func (s *SyncService) syncSource(ctx context.Context, src Source) error {
 		s.repo.UpdateSyncJob(ctx, job.ID, "failed", total, err.Error())
 		return fmt.Errorf("fetch tours from %s: %w", src.Name(), err)
 	}
-	for _, t := range tours {
+	for i, t := range tours {
+		if len(destIDs) > 0 {
+			t.DestinationID = destIDs[i%len(destIDs)]
+		}
 		if err := s.repo.CreateTour(ctx, &t); err != nil {
 			continue
 		}
@@ -79,10 +85,24 @@ func (s *SyncService) syncSource(ctx context.Context, src Source) error {
 }
 
 func (s *SyncService) GetJobs(ctx context.Context) ([]model.SyncJob, error) {
-	// placeholder: could query repo; returning empty for now
-	return []model.SyncJob{}, nil
+	return s.repo.GetSyncJobs(ctx, 100)
+}
+
+func (s *SyncService) GetJobsBySource(ctx context.Context, source string) ([]model.SyncJob, error) {
+	jobs, err := s.repo.GetSyncJobs(ctx, 100)
+	if err != nil {
+		return nil, err
+	}
+	var filtered []model.SyncJob
+	for _, j := range jobs {
+		if source == "" || j.Source == source {
+			filtered = append(filtered, j)
+		}
+	}
+	return filtered, nil
 }
 
 var _ interface {
 	SyncAll(context.Context) error
 } = (*SyncService)(nil)
+

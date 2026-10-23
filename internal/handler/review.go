@@ -22,6 +22,7 @@ func (h *ReviewHandler) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		reviews.POST("", h.add)
 		reviews.GET("/tour/:tour_id", h.list)
+		reviews.DELETE("/:id", h.delete)
 	}
 }
 
@@ -32,8 +33,7 @@ type addReviewRequest struct {
 }
 
 func (h *ReviewHandler) add(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, _ := userIDRaw.(string)
+	userIDStr := userIDFromContext(c)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
@@ -62,6 +62,19 @@ func (h *ReviewHandler) add(c *gin.Context) {
 	c.JSON(http.StatusCreated, model.Response{Success: true, Data: rv})
 }
 
+func (h *ReviewHandler) delete(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid id"})
+		return
+	}
+	if err := h.reviewSvc.DeleteReview(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "deleted"}})
+}
+
 func (h *ReviewHandler) list(c *gin.Context) {
 	tourID, err := uuid.Parse(c.Param("tour_id"))
 	if err != nil {
@@ -75,3 +88,4 @@ func (h *ReviewHandler) list(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: reviews})
 }
+

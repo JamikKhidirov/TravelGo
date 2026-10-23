@@ -24,12 +24,12 @@ func (h *OrderHandler) RegisterRoutes(r *gin.RouterGroup) {
 		orders.GET("", h.list)
 		orders.GET("/:id", h.get)
 		orders.POST("/:id/cancel", h.cancel)
+		orders.PUT("/:id/status", h.updateStatus)
 	}
 }
 
 func (h *OrderHandler) list(c *gin.Context) {
-	userIDRaw, _ := c.Get("user_id")
-	userIDStr, _ := userIDRaw.(string)
+	userIDStr := userIDFromContext(c)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid user_id"})
@@ -79,4 +79,25 @@ func (h *OrderHandler) cancel(c *gin.Context) {
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "cancelled"}})
 }
 
+func (h *OrderHandler) updateStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid id"})
+		return
+	}
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.orderSvc.UpdateStatus(c.Request.Context(), id, req.Status); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "status updated"}})
+}
+
 var _ = time.Now
+
