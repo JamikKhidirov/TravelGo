@@ -46,15 +46,15 @@ func (s *CityAPISource) doGet(ctx context.Context, path string) ([]byte, error) 
 }
 
 type cityAPICountry struct {
-	ISOAlpha2   string  `json:"iso_alpha2"`
-	CommonName  string  `json:"common_name"`
-	Capital     string  `json:"capital"`
-	Region      string  `json:"region"`
-	Subregion   string  `json:"subregion"`
-	Population  int64   `json:"population"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	FlagURL     string  `json:"flag_url"`
+	ISOAlpha2  string  `json:"iso_alpha2"`
+	CommonName string  `json:"common_name"`
+	Capital    string  `json:"capital"`
+	Region     string  `json:"region"`
+	Subregion  string  `json:"subregion"`
+	Population int64   `json:"population"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	FlagURL    string  `json:"flag_url"`
 }
 
 type cityAPICountriesResp struct {
@@ -146,10 +146,17 @@ func (s *CityAPISource) FetchTours(ctx context.Context) ([]model.Tour, error) {
 	return tours, nil
 }
 
+// FetchTickets is not provided by CityAPI; it only exposes destinations and tours.
+func (s *CityAPISource) FetchTickets(ctx context.Context) ([]model.Ticket, error) {
+	return []model.Ticket{}, nil
+}
+
 var _ interface {
 	FetchDestinations(context.Context) ([]model.Destination, error)
 	FetchTours(context.Context) ([]model.Tour, error)
+	FetchTickets(context.Context) ([]model.Ticket, error)
 } = (*CityAPISource)(nil)
+
 // keep Source alias
 type Source = interface {
 	Name() string

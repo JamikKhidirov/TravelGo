@@ -5,61 +5,259 @@
     "description": "Complete GoTravel API collection: health, destinations, tours, events, sync, auth, cart, orders, payments, reviews, vouchers, admin, WebSocket."
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "token", "value": "" },
-    { "key": "userId", "value": "" },
-    { "key": "destinationId", "value": "" },
-    { "key": "tourId", "value": "" },
-    { "key": "itemId", "value": "" },
-    { "key": "orderId", "value": "" },
-    { "key": "paymentId", "value": "" },
-    { "key": "reviewId", "value": "" },
-    { "key": "voucherId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "destinationId",
+      "value": ""
+    },
+    {
+      "key": "tourId",
+      "value": ""
+    },
+    {
+      "key": "itemId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "reviewId",
+      "value": ""
+    },
+    {
+      "key": "voucherId",
+      "value": ""
+    },
+    {
+      "key": "ticketId",
+      "value": ""
+    },
+    {
+      "key": "deviceToken",
+      "value": ""
+    }
   ],
   "item": [
     {
       "name": "Health",
       "item": [
-        { "name": "Health", "request": { "method": "GET", "url": "{{baseUrl}}/health" } },
-        { "name": "Health versioned", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/health" } }
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Health versioned",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/health"
+          }
+        }
       ]
     },
     {
       "name": "Destinations",
       "item": [
-        { "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/destinations?page=1&page_size=20" } },
-        { "name": "Search", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/destinations/search?q=city&min_rating=0&max_price=10000&page=1&page_size=20" } },
-        { "name": "Top", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/destinations/top?limit=10" } },
-        { "name": "Countries", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/destinations/countries" } },
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}" } },
-        { "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/destinations", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Rome\",\n  \"country\": \"Italy\",\n  \"city\": \"Rome\",\n  \"description\": \"Eternal city\",\n  \"image_url\": \"https://example.com/rome.jpg\",\n  \"rating\": 4.8,\n  \"price_from\": 1200,\n  \"currency\": \"USD\"\n}" } } },
-        { "name": "Update", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Rome\",\n  \"country\": \"Italy\",\n  \"city\": \"Rome\",\n  \"description\": \"Eternal city updated\",\n  \"rating\": 4.9,\n  \"price_from\": 1300,\n  \"currency\": \"USD\"\n}" } } },
-        { "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}" } }
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations/search?q=city&min_rating=0&max_price=10000&page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Top",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations/top?limit=10"
+          }
+        },
+        {
+          "name": "Countries",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations/countries"
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}"
+          }
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/destinations",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rome\",\n  \"country\": \"Italy\",\n  \"city\": \"Rome\",\n  \"description\": \"Eternal city\",\n  \"image_url\": \"https://example.com/rome.jpg\",\n  \"rating\": 4.8,\n  \"price_from\": 1200,\n  \"currency\": \"USD\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rome\",\n  \"country\": \"Italy\",\n  \"city\": \"Rome\",\n  \"description\": \"Eternal city updated\",\n  \"rating\": 4.9,\n  \"price_from\": 1300,\n  \"currency\": \"USD\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/destinations/{{destinationId}}"
+          }
+        }
       ]
     },
     {
       "name": "Tours",
       "item": [
-        { "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/tours?page=1&page_size=20" } },
-        { "name": "Search", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/tours/search?q=tour&available=true&min_price=0&max_price=10000&min_duration=1&max_duration=30&page=1&page_size=20" } },
-        { "name": "Featured", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/tours/featured?limit=10" } },
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/tours/{{tourId}}" } },
-        { "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/tours", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Rome Weekend\",\n  \"description\": \"3 days in Rome\",\n  \"price\": 500,\n  \"currency\": \"USD\",\n  \"duration_days\": 3,\n  \"start_date\": \"2026-12-01T00:00:00Z\",\n  \"end_date\": \"2026-12-04T00:00:00Z\",\n  \"available\": true,\n  \"image_url\": \"https://example.com/tour.jpg\"\n}" } } },
-        { "name": "Update", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/tours/{{tourId}}", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Rome Weekend Updated\",\n  \"price\": 550,\n  \"currency\": \"USD\",\n  \"duration_days\": 4,\n  \"available\": true\n}" } } },
-        { "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/tours/{{tourId}}" } }
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours/search?q=tour&available=true&min_price=0&max_price=10000&min_duration=1&max_duration=30&page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Featured",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours/featured?limit=10"
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tours/{{tourId}}"
+          }
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/tours",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Rome Weekend\",\n  \"description\": \"3 days in Rome\",\n  \"price\": 500,\n  \"currency\": \"USD\",\n  \"duration_days\": 3,\n  \"start_date\": \"2026-12-01T00:00:00Z\",\n  \"end_date\": \"2026-12-04T00:00:00Z\",\n  \"available\": true,\n  \"image_url\": \"https://example.com/tour.jpg\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/tours/{{tourId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Rome Weekend Updated\",\n  \"price\": 550,\n  \"currency\": \"USD\",\n  \"duration_days\": 4,\n  \"available\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/tours/{{tourId}}"
+          }
+        }
       ]
     },
     {
       "name": "Events",
       "item": [
-        { "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/events?limit=50" } }
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/events?limit=50"
+          }
+        }
       ]
     },
     {
       "name": "Sync",
       "item": [
-        { "name": "Trigger", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/sync" } },
-        { "name": "Jobs", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/sync/jobs" } }
+        {
+          "name": "Trigger",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/sync"
+          }
+        },
+        {
+          "name": "Jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/sync/jobs"
+          }
+        }
       ]
     },
     {
@@ -80,7 +278,20 @@
               }
             }
           ],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/register", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"phone\": \"+1234567890\",\n  \"role\": \"user\"\n}" } }
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"phone\": \"+1234567890\",\n  \"role\": \"user\"\n}"
+            }
+          }
         },
         {
           "name": "Login",
@@ -97,74 +308,814 @@
               }
             }
           ],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}" } }
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            }
+          }
         },
-        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/auth/me", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } },
-        { "name": "Get Profile", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/auth/profile", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } },
-        { "name": "Update Profile", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/auth/profile", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"phone\": \"+1234567890\"\n}" } } },
-        { "name": "Change Password", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/change-password", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"old_password\": \"password123\",\n  \"new_password\": \"newpass456\"\n}" } } },
-        { "name": "Refresh Token", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/refresh", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } }
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/auth/profile",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/auth/profile",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"phone\": \"+1234567890\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/change-password",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"password123\",\n  \"new_password\": \"newpass456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        }
       ]
     },
     {
       "name": "Cart",
       "item": [
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/cart", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } },
-        { "name": "Add", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/cart/add", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"quantity\": 2,\n  \"price\": 500\n}" } } },
-        { "name": "Update Item", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/cart/item/{{itemId}}", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"quantity\": 3\n}" } } },
-        { "name": "Remove Item", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/cart/item/{{itemId}}", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } },
-        { "name": "Checkout", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/cart/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"passenger_name\": \"John Doe\",\n  \"passenger_email\": \"user@example.com\",\n  \"passenger_phone\": \"+1234567890\",\n  \"travel_date\": \"2026-12-01T00:00:00Z\",\n  \"nights\": 5,\n  \"adults\": 2,\n  \"children\": 1\n}" } } },
-        { "name": "Clear", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/cart/clear", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } }
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/cart",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Add",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/cart/add",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"quantity\": 2,\n  \"price\": 500\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Item",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/cart/item/{{itemId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 3\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove Item",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/cart/item/{{itemId}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/cart/checkout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"passenger_name\": \"John Doe\",\n  \"passenger_email\": \"user@example.com\",\n  \"passenger_phone\": \"+1234567890\",\n  \"travel_date\": \"2026-12-01T00:00:00Z\",\n  \"nights\": 5,\n  \"adults\": 2,\n  \"children\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Clear",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/cart/clear",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        }
       ]
     },
     {
       "name": "Orders",
       "item": [
-        { "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/orders?page=1&page_size=20", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }] } },
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/orders/{{orderId}}" } },
-        { "name": "Cancel", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel" } },
-        { "name": "Update Status", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/status", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"paid\"\n}" } } }
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders?page=1&page_size=20",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel"
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            }
+          }
+        }
       ]
     },
     {
       "name": "Payments",
       "item": [
-        { "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/payments", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"amount\": 500,\n  \"currency\": \"USD\",\n  \"provider\": \"stripe\"\n}" } } },
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}" } },
-        { "name": "By Order", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/payments/order/{{orderId}}" } },
-        { "name": "Confirm", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}/confirm" } }
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/payments",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"amount\": 500,\n  \"currency\": \"USD\",\n  \"provider\": \"stripe\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}"
+          }
+        },
+        {
+          "name": "By Order",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/payments/order/{{orderId}}"
+          }
+        },
+        {
+          "name": "Confirm",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}/confirm"
+          }
+        }
       ]
     },
     {
       "name": "Reviews",
       "item": [
-        { "name": "Add", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/reviews", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "X-User-Id", "value": "{{userId}}" }], "body": { "mode": "raw", "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"rating\": 5,\n  \"comment\": \"Great tour\"\n}" } } },
-        { "name": "List by Tour", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/reviews/tour/{{tourId}}" } },
-        { "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/reviews/{{reviewId}}" } }
+        {
+          "name": "Add",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/reviews",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tour_id\": \"{{tourId}}\",\n  \"rating\": 5,\n  \"comment\": \"Great tour\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List by Tour",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/reviews/tour/{{tourId}}"
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/reviews/{{reviewId}}"
+          }
+        }
       ]
     },
     {
       "name": "Vouchers",
       "item": [
-        { "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/vouchers?page=1&page_size=20" } },
-        { "name": "Get", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}" } },
-        { "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/vouchers", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"Summer Deal\",\n  \"description\": \"Discount package\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 900,\n  \"currency\": \"USD\",\n  \"duration_nights\": 7,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"includes_meal\": false,\n  \"image_url\": \"https://example.com/deal.jpg\",\n  \"is_active\": true\n}" } } },
-        { "name": "Update", "request": { "method": "PUT", "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"Summer Deal Updated\",\n  \"description\": \"Updated package\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 850,\n  \"currency\": \"USD\",\n  \"duration_nights\": 7,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"includes_meal\": false,\n  \"is_active\": true\n}" } } },
-        { "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}" } }
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/vouchers?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}"
+          }
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/vouchers",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Summer Deal\",\n  \"description\": \"Discount package\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 900,\n  \"currency\": \"USD\",\n  \"duration_nights\": 7,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"includes_meal\": false,\n  \"image_url\": \"https://example.com/deal.jpg\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Summer Deal Updated\",\n  \"description\": \"Updated package\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 850,\n  \"currency\": \"USD\",\n  \"duration_nights\": 7,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"includes_meal\": false,\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/vouchers/{{voucherId}}"
+          }
+        }
       ]
     },
     {
       "name": "Admin",
       "item": [
-        { "name": "Stats", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/admin/stats" } },
-        { "name": "Users", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/admin/users?page=1&page_size=20" } },
-        { "name": "Orders", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/admin/orders?page=1&page_size=20" } },
-        { "name": "Update Order Status", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"completed\"\n}" } } },
-        { "name": "Create Destination", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/admin/destinations", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Paris\",\n  \"country\": \"France\",\n  \"city\": \"Paris\",\n  \"description\": \"City of light\",\n  \"rating\": 4.7,\n  \"price_from\": 1000,\n  \"currency\": \"USD\"\n}" } } },
-        { "name": "Create Tour", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/admin/tours", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Paris Weekend\",\n  \"price\": 600,\n  \"currency\": \"USD\",\n  \"duration_days\": 3,\n  \"available\": true\n}" } } },
-        { "name": "Create Voucher", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/admin/vouchers", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"Paris Deal\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 800,\n  \"currency\": \"USD\",\n  \"duration_nights\": 5,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"is_active\": true\n}" } } },
-        { "name": "Sync", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/admin/sync" } },
-        { "name": "Sync Jobs", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/admin/sync-jobs" } }
+        {
+          "name": "Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/stats"
+          }
+        },
+        {
+          "name": "Users",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/users?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Orders",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/orders?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Create Ticket",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/tickets",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"flight\",\n  \"origin_city\": \"Moscow\",\n  \"origin_country\": \"Russia\",\n  \"destination_city\": \"Istanbul\",\n  \"destination_country\": \"Turkey\",\n  \"departure_at\": \"2026-12-01T10:00:00Z\",\n  \"arrival_at\": \"2026-12-01T13:00:00Z\",\n  \"price\": 250,\n  \"currency\": \"USD\",\n  \"carrier\": \"Aeroflot\",\n  \"number\": \"FL101\",\n  \"class\": \"economy\",\n  \"available_seats\": 30\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Destination",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/destinations",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Paris\",\n  \"country\": \"France\",\n  \"city\": \"Paris\",\n  \"description\": \"City of light\",\n  \"rating\": 4.7,\n  \"price_from\": 1000,\n  \"currency\": \"USD\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Tour",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/tours",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Paris Weekend\",\n  \"price\": 600,\n  \"currency\": \"USD\",\n  \"duration_days\": 3,\n  \"available\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Voucher",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/vouchers",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Paris Deal\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"price\": 800,\n  \"currency\": \"USD\",\n  \"duration_nights\": 5,\n  \"includes_flight\": true,\n  \"includes_hotel\": true,\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Sync",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/sync"
+          }
+        },
+        {
+          "name": "Sync Jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/sync-jobs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tickets?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Flights",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tickets?type=flight&page_size=20"
+          }
+        },
+        {
+          "name": "Trains",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tickets?type=train&page_size=20"
+          }
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tickets/search?q=Moscow&type=flight&page=1&page_size=20"
+          }
+        },
+        {
+          "name": "City Packages",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/cities/Moscow/packages"
+          }
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tickets/{{ticketId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Push",
+      "item": [
+        {
+          "name": "Register Android",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/devices/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platform\": \"android\",\n  \"token\": \"fcm-token\",\n  \"app_version\": \"1.0.0\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register iOS",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/devices/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platform\": \"ios\",\n  \"token\": \"apns-token\",\n  \"app_version\": \"1.0.0\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Devices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/devices",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Unregister",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/devices/{{deviceToken}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Admin Send",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/push",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"title\": \"GoTravel\",\n  \"body\": \"New tours available\",\n  \"data\": {\"screen\": \"tours\"}\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin Send All",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/push",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"GoTravel\",\n  \"body\": \"Broadcast to all devices\"\n}"
+            }
+          }
+        },
+        {
+          "name": "History",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/push",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Provider",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/push/provider",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ]
+          }
+        }
       ]
     },
     {
@@ -182,4 +1133,3 @@
     }
   ]
 }
-

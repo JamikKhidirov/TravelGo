@@ -1,352 +1,325 @@
-![CI](https://github.com/anomalyco/GoTravel/actions/workflows/ci.yml/badge.svg)
-![Go](https://img.shields.io/badge/Go-1.22-blue)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED)
+<div align="center">
 
-# GoTravel — Travel Microservice (Go)
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f2027,45:203a43,100:2c5364&height=230&section=header&text=GoTravel&fontSize=78&fontColor=ffffff&animation=fadeIn&desc=Travel%20aggregator%20%C2%B7%20MSP%20middleware%20%C2%B7%20Go&descAlignY=64&descSize=18" alt="GoTravel header" />
 
-Микросервис для сбора и выдачи данных о путешествиях на языке **Go**.  
-Проект написан так, чтобы его мог поддерживать разработчик любой квалификации, в том числе не бэкенд-разработчик.
+<a href="https://github.com/JamikKhidirov/TravelGo">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=900&color=4F8CFF&center=true&vCenter=true&width=760&lines=Destinations+%2B+Tours+%2B+Vouchers;Flights+%2B+Trains+%2B+Buses;MSP+aggregation+layer+in+Go;REST+%2B+WebSocket+%2B+Push+notifications;Docker+%2B+CI%2FCD+%2B+Swagger" alt="Typing animation" />
+</a>
+
+<p>
+  <a href="https://github.com/JamikKhidirov/TravelGo/actions/workflows/ci.yml"><img src="https://github.com/JamikKhidirov/TravelGo/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/JamikKhidirov/TravelGo/releases/latest"><img src="https://img.shields.io/github/v/release/JamikKhidirov/TravelGo?display_name=tag&sort=semver" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white" alt="Redis" />
+  <img src="https://img.shields.io/badge/WebSocket-realtime-4F8CFF" alt="WebSocket" />
+  <img src="https://img.shields.io/badge/Swagger-OpenAPI_3.0-85EA2D?logo=swagger&logoColor=black" alt="Swagger" />
+  <img src="https://img.shields.io/badge/Postman-collection-FF6C37?logo=postman&logoColor=white" alt="Postman" />
+</p>
+
+<p>
+  <a href="#быстрый-старт">Быстрый старт</a> ·
+  <a href="#документация">Документация</a> ·
+  <a href="#api">API</a> ·
+  <a href="#билеты-и-msp">Билеты</a> ·
+  <a href="#push-уведомления">Push</a> ·
+  <a href="#деплой-на-vps">VPS</a> ·
+  <a href="#релизы">Релизы</a>
+</p>
+
+</div>
 
 ---
 
-## Что делает сервис
+## О проекте
 
-1. **Собирает данные о путешествиях** из MSP-серверов и других открытых источников **без API-ключей**.
-2. **Сохраняет всё в свою базу данных PostgreSQL**.
-3. **Кэширует популярные запросы в Redis** (чтобы отвечать клиенту быстрее).
-4. **Отправляет события об изменениях в Kafka** (туризм-лента, аудит, реалтайм).
-5. **Отдаёт данные клиенту через REST API** (для веб-/мобилки).
-6. **Передаёт обновления в реальном времени через WebSocket** (подходит для анимаций на клиенте).
+**GoTravel** — backend-прослойка между клиентами и несколькими travel MSP-серверами. Сервис забирает направления, туры, ваучеры и билеты из разных источников, нормализует и объединяет данные, хранит их в PostgreSQL и отдаёт клиенту через единый REST API, WebSocket и push-уведомления.
 
----
+Клиенту не нужно знать про десятки MSP: он работает с одним API.
 
-## Откуда сервис собирает данные
-
-| Источник | Что собирает | Нужен ли API-ключ |
-|---|---|---|
-| **Мок-MSP сервер** (`internal/adapter/mock`) | Направления (страны/города) и туры | ❌ Нет |
-| **Публичные скраперы** (`internal/adapter/scraper`) | Открытые каталоги путешествий | ❌ Нет |
-| **Своя PostgreSQL** | Уже собранные и сохранённые данные | — |
-
-В коде каждый источник реализует интерфейс `Source` (файл `internal/adapter/mock/mock.go`).  
-Чтобы добавить новый MSP-сервер, создайте новый адаптер и зарегистрируйте его в `cmd/server/main.go` — больше ничего менять не нужно.
-
----
-
-## Архитектура проекта (простая схема)
-
+```mermaid
+flowchart LR
+    subgraph S["Источники"]
+        A1["mock_msp_server"]
+        A2["msp2_server"]
+        A3["cityapi_free parser"]
+        A4["flight_msp_server"]
+        A5["rail_msp_server"]
+    end
+    A1 --> SYNC["SyncService"]
+    A2 --> SYNC
+    A3 --> SYNC
+    A4 --> SYNC
+    A5 --> SYNC
+    SYNC --> DB[("PostgreSQL")]
+    DB --> API["REST API"]
+    DB --> WS["WebSocket"]
+    DB --> PUSH["Push Service"]
+    API --> C["Web / Mobile / Partners"]
+    WS --> C
+    PUSH --> IOS["iOS"]
+    PUSH --> ANDROID["Android"]
 ```
-Клиент (браузер / мобильное приложение / Postman)
-        │
-        ▼
-┌─────────────────────┐
-│  Gin REST API       │  /api/v1/destinations, /api/v1/tours,
-│  + Swagger UI       │  /api/v1/events, /api/v1/sync, /health
-│  + WebSocket (/ws)  │
-└──────────┬──────────┘
-           │
-    ┌──────┴──────┐
-    ▼             ▼
-Handler      Service
-(роуты,      (бизнес-логика,
- валидация)  события, кэш)
-    │             │
-    ▼             ▼
-Repository   Cache (Redis)
-(PostgreSQL) └─────────┘
-    │
-    ▼
-Adapters (Mock MSP, Public Scraper)  ──► внешние MSP-серверы без API-ключей
-    │
-    ▼
-Broker (Kafka) ──► события (создание направления, тур, синхронизация и т.д.)
-```
 
-Папки проекта:
-- `cmd/server/main.go` — точка входа (запуск сервера).
-- `internal/config/` — чтение конфигурации (`config.yaml` + переменные окружения).
-- `internal/model/` — структуры данных (направления, туры, события, ответы API).
-- `internal/repository/` — работа с PostgreSQL (запросы, миграции).
-- `internal/service/` — бизнес-логика (создание списка, синхронизация с MSP).
-- `internal/handler/` — REST-обработчики + WebSocket-хаб.
-- `internal/cache/` — Redis-кэш.
-- `internal/broker/` — Kafka-продюсер/консьюмер.
-- `internal/adapter/` — источники данных (мок-MSP, скрапер, postgres).
-- `api/swagger/swagger.yaml` — OpenAPI 3.0 спецификация.
-- `docs/swagger/doc.go` — сгенерированная документация Swagger.
-- `postman/go-travel.postman_collection.json` — коллекция для Postman.
-- `configs/config.yaml` — основной конфиг.
-- `docker-compose.yml` — инфраструктура (Postgres, Redis, Kafka, Zookeeper, приложение).
+## Возможности
 
----
+- **MSP-агрегатор:** несколько MSP-источников + публичный парсер CityAPI.
+- **Направления и туры:** CRUD, поиск, топ, страны, пагинация.
+- **Билеты:** авиа, ЖД и автобусы; фильтры по городу, направлению, типу и дате.
+- **Городские пакеты:** `GET /api/v1/cities/{city}/packages` — направления, туры, ваучеры и билеты по городу.
+- **Корзина и заказы:** добавление туров, checkout, статусы, отмена.
+- **Оплаты:** создание и подтверждение платежа.
+- **Отзывы и ваучеры:** рейтинг, комментарии, CRUD ваучеров.
+- **WebSocket:** геолокация, комнаты, presence, live-обновления.
+- **Push:** регистрация iOS/Android устройств и админская рассылка через FCM.
+- **Админка:** встроенная панель `/admin` со статистикой и отправкой push.
+- **Swagger + Postman:** полная OpenAPI-спецификация и готовая коллекция.
+- **Docker + CI/CD:** compose, GitHub Actions, релизные бинарники.
 
 ## Быстрый старт
 
-### Что нужно установить
-- **Docker** и **Docker Compose** (рекомендуемый способ).
-- Либо вручную: **Go 1.22+**, PostgreSQL, Redis, Kafka, Zookeeper.
-
-### Способ 1 — Docker (проще всего)
-
-Из папки `go-travel` выполните:
+### Docker (рекомендуется)
 
 ```bash
-docker-compose up --build
+git clone https://github.com/JamikKhidirov/TravelGo.git
+cd TravelGo
+docker compose up -d --build
 ```
 
-После этого:
-- **API:** `http://localhost:8080`
-- **Swagger UI:** `http://localhost:8080/swagger/index.html`
-- **Health:** `http://localhost:8080/health`
-- **WebSocket событий:** `ws://localhost:8080/ws/events`
+Откройте:
 
-Остановить:
+| Сервис | URL |
+|---|---|
+| API | http://localhost:8080 |
+| Swagger UI | http://localhost:8080/swagger/index.html |
+| Admin panel | http://localhost:8080/admin |
+| Health | http://localhost:8080/health |
+| WebSocket | ws://localhost:8080/ws?room=global |
+
+Первичная синхронизация:
+
 ```bash
-docker-compose down
+curl -X POST http://localhost:8080/api/v1/sync
 ```
 
-### Способ 2 — без Docker
+Остановка:
 
 ```bash
-cd go-travel
+docker compose down
+```
+
+### Локально
+
+```bash
 go mod tidy
 go run ./cmd/server
 ```
 
-Перед запуском отредактируйте `configs/config.yaml` под свои хосты/пароли.
+Нужны PostgreSQL и Redis, параметры — в `configs/config.yaml` или через переменные окружения.
 
----
+## Документация
 
-## Переменные окружения (если не используете docker-compose)
+| Документ | Описание |
+|---|---|
+| [REST API](docs/REST.md) | Все эндпоинты, авторизация, пагинация, примеры `curl` |
+| [WebSocket](docs/WEBSOCKET.md) | Геолокация, комнаты, presence, формат сообщений |
+| [Архитектура](docs/ARCHITECTURE.md) | Слои, синхронизация, билеты, push |
+| [Деплой на VPS](docs/DEPLOYMENT.md) | Ubuntu, Docker, Nginx/Caddy, TLS, backup, systemd |
+| [Swagger UI](http://localhost:8080/swagger/index.html) | Интерактивная документация локально |
+| [OpenAPI YAML](api/swagger/swagger.yaml) | Спецификация OpenAPI 3.0 |
+| [Postman](postman/go-travel.postman_collection.json) | Коллекция запросов |
+| [docs/README.md](docs/README.md) | Индекс документации |
 
-| Переменная | По умолчанию | Описание |
-|---|---|---|
-| `APP_ENV` | `development` | Окружение (`development` / `production`) |
-| `APP_PORT` | `8080` | Порт сервера |
-| `DB_HOST` | `localhost` | Хост PostgreSQL |
-| `DB_PORT` | `5432` | Порт PostgreSQL |
-| `DB_USER` | `travel` | Пользователь БД |
-| `DB_PASSWORD` | `travelpass` | Пароль БД |
-| `DB_NAME` | `travel_db` | Имя базы данных |
-| `REDIS_ADDR` | `localhost:6379` | Адрес Redis |
-| `KAFKA_BROKERS` | `localhost:9092` | Брокеры Kafka через запятую |
+## API
 
----
+Базовый URL: `http://localhost:8080/api/v1`
 
-## REST API (все endpoints)
+Авторизация:
 
-| Метод | Путь | Описание |
-|---|---|---|
-| `GET` | `/health` | Проверка работы сервера |
-| `GET` | `/api/v1/destinations` | Список направлений (`?country=`, `?city=`, `?page=`, `?page_size=`) |
-| `GET` | `/api/v1/destinations/:id` | Одно направление по ID |
-| `POST` | `/api/v1/destinations` | Создать направление (тело JSON) |
-| `GET` | `/api/v1/tours` | Список туров (`?destination_id=`, `?available=`, `?page=`, `?page_size=`) |
-| `GET` | `/api/v1/tours/:id` | Один тур по ID |
-| `POST` | `/api/v1/tours` | Создать тур (тело JSON) |
-| `GET` | `/api/v1/events` | Лента событий (`?aggregate=`, `?aggregate_id=`, `?limit=`) |
-| `POST` | `/api/v1/sync` | Запустить сбор данных с MSP-серверов |
-| `GET` | `/ws` | WebSocket (общий) |
-| `GET` | `/ws/events` | WebSocket событий в реальном времени |
+```http
+Authorization: Bearer <token>
+X-User-Id: <uuid>
+```
 
-Swagger UI (интерактивная документация): `http://localhost:8080/swagger/index.html`
+Основные группы:
 
-### Примеры curl
+| Группа | Префикс |
+|---|---|
+| Направления | `/destinations` |
+| Туры | `/tours` |
+| Билеты | `/tickets` |
+| Городские пакеты | `/cities/{city}/packages` |
+| Синхронизация | `/sync` |
+| Auth | `/auth` |
+| Корзина | `/cart` |
+| Заказы | `/orders` |
+| Оплаты | `/payments` |
+| Отзывы | `/reviews` |
+| Ваучеры | `/vouchers` |
+| Устройства | `/devices` |
+| Админ | `/admin` |
+
+Пример регистрации и логина:
 
 ```bash
-# Проверить, что сервер живой
-curl http://localhost:8080/health
-
-# Список направлений в Италии
-curl "http://localhost:8080/api/v1/destinations?country=Италия&page_size=10"
-
-# Создать направление
-curl -X POST http://localhost:8080/api/v1/destinations \
+curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"Рим","country":"Италия","city":"Рим","description":"Вечный город","rating":4.8,"price_from":1200,"currency":"USD","source":"manual","external_id":"manual:rome:1"}'
+  -d '{"email":"user@example.com","password":"password123","first_name":"John","last_name":"Doe"}'
 
-# Список туров
-curl "http://localhost:8080/api/v1/tours?available=true&page_size=5"
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+```
 
-# События (реальное время происходящего в базе)
-curl "http://localhost:8080/api/v1/events?aggregate=destination&limit=20"
+Пример билетов:
 
-# Запустить синхронизацию с MSP-серверами
+```bash
+curl "http://localhost:8080/api/v1/tickets?type=flight&origin=Moscow&destination=Istanbul"
+curl "http://localhost:8080/api/v1/tickets?type=train&page_size=20"
+curl "http://localhost:8080/api/v1/cities/Moscow/packages"
+```
+
+## Билеты и MSP
+
+Источники синхронизации:
+
+| Источник | Данные |
+|---|---|
+| `mock_msp_server` | направления, туры, билеты (flight/train/bus) |
+| `msp2_server` | направления, туры, билеты |
+| `cityapi_free` | публичный парсер стран и столиц |
+| `flight_msp_server` | авиабилеты |
+| `rail_msp_server` | ЖД-билеты |
+
+Все билеты сохраняются в таблицу `tickets` с уникальностью `(source, external_id)`, поэтому повторный sync обновляет данные, а не плодит дубликаты. Клиент получает объединённый список из `/api/v1/tickets`.
+
+Добавление нового MSP:
+
+1. Реализуйте `Name`, `FetchDestinations`, `FetchTours`.
+2. Для билетов дополнительно реализуйте `FetchTickets`.
+3. Добавьте источник в `service.NewSyncService(...)` в `cmd/server/main.go`.
+
+## WebSocket
+
+```js
+const ws = new WebSocket(
+  "ws://localhost:8080/ws?room=global&user_id=11111111-2222-3333-4444-555555555555&name=Traveler"
+);
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "location",
+    location: { lat: 55.7558, lng: 37.6173, accuracy: 10 }
+  }));
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === "presence") console.log("online:", msg.payload);
+  if (msg.type === "location") console.log("moved:", msg.user_id, msg.location);
+};
+```
+
+Подробнее: [docs/WEBSOCKET.md](docs/WEBSOCKET.md).
+
+## Push-уведомления
+
+1. Мобильное приложение получает FCM/APNs токен.
+2. Регистрирует его:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/devices/register \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: $USER_ID" \
+  -d '{"platform":"android","token":"fcm-token","app_version":"1.0.0"}'
+```
+
+3. Админ отправляет push из панели `http://localhost:8080/admin` или через API:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/admin/push \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"<uuid>","title":"GoTravel","body":"New tours","data":{"screen":"tours"}}'
+```
+
+Для реальной доставки задайте `FCM_SERVER_KEY` (Firebase Cloud Messaging доставляет и на Android, и на iOS). Без ключа используется `log`-провайдер.
+
+## Деплой на VPS
+
+Кратко:
+
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+git clone https://github.com/JamikKhidirov/TravelGo.git
+cd TravelGo
+docker compose up -d --build
+```
+
+Затем настройте Nginx/Caddy, TLS и `wss://`. Полная инструкция: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Релизы
+
+Релиз создаётся автоматически при пуше тега `v*`:
+
+```bash
+git tag v1.3.0
+git push origin v1.3.0
+```
+
+GitHub Actions соберёт и приложит к релизу:
+
+- `go-travel-server-windows-amd64.exe`
+- `go-travel-server-linux-amd64`
+- `checksums.txt`
+
+Скачать последний `.exe`:
+
+[![Download Windows EXE](https://img.shields.io/badge/Download-Windows%20EXE-0078D4?logo=windows&logoColor=white)](https://github.com/JamikKhidirov/TravelGo/releases/latest/download/go-travel-server-windows-amd64.exe)
+
+Локальная сборка:
+
+```bash
+go build -trimpath -ldflags "-s -w" -o dist/go-travel-server-windows-amd64.exe ./cmd/server
+```
+
+## Структура проекта
+
+```text
+cmd/server/                 точка входа, Swagger UI, WebSocket, admin panel
+internal/adapter/           MSP и публичные источники
+internal/handler/           REST, WebSocket, push, admin
+internal/service/           бизнес-логика и синхронизация
+internal/repository/        PostgreSQL, upsert, пагинация
+internal/model/             доменные модели
+internal/middleware/        auth/admin middleware
+configs/                    конфигурация
+api/swagger/                OpenAPI YAML
+docs/                       REST, WebSocket, архитектура, VPS
+postman/                    Postman collection
+.github/workflows/          CI и Release
+```
+
+## Проверка
+
+```bash
+go build ./...
+go vet ./...
+go test ./...
+curl http://localhost:8080/health
 curl -X POST http://localhost:8080/api/v1/sync
+curl "http://localhost:8080/api/v1/tickets?page_size=5"
 ```
 
----
+## CI/CD
 
-## Postman
+- **CI** — сборка, `go vet`, тесты и Docker build на каждый push/PR.
+- **Release** — по тегу `v*` собираются Windows `.exe`, Linux-бинарник и checksums, затем публикуется GitHub Release.
 
-Импортируйте файл: `postman/go-travel.postman_collection.json`.
+<div align="center">
 
-1. Откройте Postman → **Import** → выберите файл.
-2. В переменных окружения задайте `baseUrl` = `http://localhost:8080`.
-3. Отправляйте запросы из коллекции.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:2c5364,50:203a43,100:0f2027&height=140&section=footer&text=GoTravel&fontSize=38&fontColor=ffffff&animation=fadeIn" alt="footer" />
 
-WebSocket `/ws/events` можно открыть в Postman (WebSocket-запрос) для получения событий в реальном времени.
+<sub>GoTravel · Go · PostgreSQL · Redis · WebSocket · Docker · CI/CD</sub>
 
----
-
-## Swagger документация
-
-- Спецификация: `api/swagger/swagger.yaml`.
-- После запуска сервера откройте: `http://localhost:8080/swagger/index.html`.
-- Там можно сразу пробовать все запросы без Postman.
-
----
-
-## WebSocket / Реалтайм (для анимаций на клиенте)
-
-Клиент может подключиться к `ws://localhost:8080/ws/events`.  
-Когда в базе появляется новое направление, тур или происходит синхронизация, сервер рассылает событие всем подключённым клиентам.  
-Это удобно для анимаций: например, на клиенте nuevos карточки направлений pojawiają się без перезагрузки страницы.
-
----
-
-## Как добавить новый источник данных (MSP-сервер)
-
-Если у вас появится ещё один MSP-сервер без API-ключа:
-
-1. Создайте папку `internal/adapter/<имя_источника>/`.
-2. Напишите структуру, реализующую интерфейс:
-
-```go
-type Source interface {
-    Name() string
-    FetchDestinations(ctx context.Context) ([]model.Destination, error)
-    FetchTours(ctx context.Context) ([]model.Tour, error)
-}
-```
-
-3. В `cmd/server/main.go` добавьте источник в `service.NewSyncService(repo, mockSrc, новыйИсточник)`.
-4. Пересоберите: `docker-compose up --build`.
-
-Готово — сервис начнёт собирать данные и из нового источника.
-
----
-
-## Как поднять сервис на VPS (пошагово, для не бэкенд-разработчика)
-
-### 1. Купите VPS
-Рекомендуется: 2 vCPU, 4 GB RAM, Ubuntu 22.04 LTS.  
-Подойдёт:any VPS (Timeweb, Yandex Cloud, Selectel, DigitalOcean, Hetzner и др.).
-
-### 2. Подключитесь к серверу
-```bash
-ssh root@<IP_ВАШЕГО_VPS>
-```
-
-### 3. Установите Docker и Docker Compose
-```bash
-apt update && apt upgrade -y
-apt install -y ca-certificates curl gnupg lsb-release
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-systemctl enable --now docker
-```
-
-### 4. Склонируйте проект на VPS
-```bash
-apt install -y git
-git clone <ссылка_на_ваш_репозиторий> /opt/go-travel
-cd /opt/go-travel
-```
-
-### 5. Настройте конфиг (если нужно)
-Отредактируйте `configs/config.yaml` — поменяйте пароли, если хотите. По умолчанию пароли уже прописаны в `docker-compose.yml`.
-
-### 6. Запустите всё одной командой
-```bash
-docker-compose up -d --build
-```
-
-### 7. Проверьте, что работает
-```bash
-curl http://<IP_ВАШЕГО_VPS>:8080/health
-```
-Должен вернуться JSON `{"success":true,...}`.
-
-Откройте в браузере: `http://<IP_ВАШЕГО_VPS>:8080/swagger/index.html` — там Swagger UI.
-
-### 8. Откройте файрвол (если нужно)
-Если на VPS стоит ufw:
-```bash
-ufw allow 8080/tcp
-ufw allow 22/tcp
-ufw enable
-```
-
-### 9. Остановка / перезапуск
-```bash
-cd /opt/go-travel
-docker-compose down          # остановить
-docker-compose up -d         # запустить снова
-docker-compose logs -f app   # посмотреть логи приложения
-```
-
-### 10. (Опционально) Домен и SSL
-Если у вас есть домен (`travel.example.com`):
-- Установите Nginx или Traefik как обратный прокси на `8080`.
-- Получите бесплатный SSL через Certbot (Let's Encrypt).
-- Или используйте Cloudflare Tunnel — не нужно открывать порты и настраивать SSL вручную.
-
----
-
-## Что добавлено «от себя» для полноценного бэкенда травел-приложения
-
-- **Валидация запросов** (`go-playground/validator`) — не пустые обязательные поля, цена > 0.
-- **Пагинация** — `page` и `page_size` на списках направлений и туров.
-- **Логи в JSON** (`slog`) — удобно смотреть в Docker и на VPS.
-- **Graceful shutdown** — сервер корректно завершается при `Ctrl+C`.
-- **Health check** — `/health` для мониторинга и балансировщика нагрузки.
-- **Event sourcing** — таблица `travel_events` хранит историю изменений (кто, когда, что создал).
-- **Sync jobs** — таблица `sync_jobs` показывает статус сбора данных из MSP (в progress / completed / failed).
-- **JWT-ready** — библиотека `golang-jwt/jwt/v5` уже в зависимостях, легко добавить авторизацию.
-- **CORS-ready WebSocket** — можно подключать клиент с любого домена.
-
----
-
-## Лицензия
-MIT
-
-
----
-
-## WebSocket Geolocation
-
-Connect to `ws://localhost:8080/ws?room=global&user_id=<uuid>&name=Traveler`.
-
-Client messages:
-```json
-{"type":"location","location":{"lat":55.7558,"lng":37.6173,"accuracy":12}}
-{"type":"join","room":"room-1"}
-{"type":"chat","message":"hello"}
-```
-
-Server broadcasts:
-```json
-{"type":"snapshot","room":"global","payload":[{"id":"...","user_id":"...","name":"Traveler","location":{"lat":0,"lng":0}}]}
-{"type":"presence","room":"global","payload":[...]}
-{"type":"location","room":"global","user_id":"...","name":"Traveler","location":{"lat":55.75,"lng":37.62}}
-```
-
-All connected clients in the same room receive location updates, enabling live map of travelers.
-
-## Authentication
-
-Use `Authorization: Bearer <token>` and `X-User-Id: <uuid>` headers for protected endpoints (cart, orders, reviews, profile).
-
-## Data Sources
-
-Sync collects from:
-- `mock_msp_server`
-- `msp2_server`
-- `cityapi_free` (public CityAPI, no key)
-
-Trigger with `POST /api/v1/sync`.
-
+</div>

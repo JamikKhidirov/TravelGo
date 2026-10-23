@@ -94,7 +94,34 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 		created_at TIMESTAMPTZ DEFAULT NOW()
 	);
 
+	CREATE TABLE IF NOT EXISTS device_tokens (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		platform VARCHAR(20) NOT NULL,
+		token TEXT UNIQUE NOT NULL,
+		app_version VARCHAR(50),
+		is_active BOOLEAN DEFAULT TRUE,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	);
+
+	CREATE TABLE IF NOT EXISTS push_notifications (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+		title VARCHAR(255) NOT NULL,
+		body TEXT NOT NULL,
+		data TEXT,
+		platform VARCHAR(20),
+		status VARCHAR(50) DEFAULT 'pending',
+		sent_count INTEGER DEFAULT 0,
+		failed_count INTEGER DEFAULT 0,
+		created_at TIMESTAMPTZ DEFAULT NOW()
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+	CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+	CREATE INDEX IF NOT EXISTS idx_device_tokens_platform ON device_tokens(platform);
+	CREATE INDEX IF NOT EXISTS idx_push_notifications_user ON push_notifications(user_id);
 	CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id);
 	CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 	CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
@@ -587,8 +614,6 @@ func (r *TravelRepository) SearchTours(ctx context.Context, q string, destID *uu
 
 var _ = time.Now
 
-
-
 func (r *TravelRepository) DistinctCountries(ctx context.Context) ([]string, error) {
 	var countries []string
 	query := "SELECT DISTINCT country FROM destinations ORDER BY country"
@@ -598,15 +623,11 @@ func (r *TravelRepository) DistinctCountries(ctx context.Context) ([]string, err
 	return countries, nil
 }
 
-
-
 func (r *TravelRepository) UpdateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
 	query := "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2"
 	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), passwordHash, userID)
 	return err
 }
-
-
 
 func (r *TravelRepository) UpdateCartItemQuantity(ctx context.Context, cartID, itemID uuid.UUID, quantity int) error {
 	query := "UPDATE cart_items SET quantity = $1 WHERE id = $2 AND cart_id = $3"
@@ -614,11 +635,8 @@ func (r *TravelRepository) UpdateCartItemQuantity(ctx context.Context, cartID, i
 	return err
 }
 
-
-
 func (r *TravelRepository) UpdateUserProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) error {
 	query := "UPDATE users SET first_name = $1, last_name = $2, phone = $3, updated_at = NOW() WHERE id = $4"
 	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), firstName, lastName, phone, userID)
 	return err
 }
-

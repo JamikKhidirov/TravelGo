@@ -30,17 +30,17 @@ func (h *VoucherHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type createVoucherRequest struct {
-	Title           string  `json:"title" binding:"required"`
-	Description     string  `json:"description"`
-	DestinationID   string  `json:"destination_id" binding:"required"`
-	Price           float64 `json:"price" binding:"gt=0"`
-	Currency        string  `json:"currency"`
-	DurationNights  int     `json:"duration_nights" binding:"min=1"`
-	IncludesFlight  bool    `json:"includes_flight"`
-	IncludesHotel   bool    `json:"includes_hotel"`
-	IncludesMeal    bool    `json:"includes_meal"`
-	ImageURL        string  `json:"image_url"`
-	IsActive        bool    `json:"is_active"`
+	Title          string  `json:"title" binding:"required"`
+	Description    string  `json:"description"`
+	DestinationID  string  `json:"destination_id" binding:"required"`
+	Price          float64 `json:"price" binding:"gt=0"`
+	Currency       string  `json:"currency"`
+	DurationNights int     `json:"duration_nights" binding:"min=1"`
+	IncludesFlight bool    `json:"includes_flight"`
+	IncludesHotel  bool    `json:"includes_hotel"`
+	IncludesMeal   bool    `json:"includes_meal"`
+	ImageURL       string  `json:"image_url"`
+	IsActive       bool    `json:"is_active"`
 }
 
 func (h *VoucherHandler) list(c *gin.Context) {
@@ -92,17 +92,17 @@ func (h *VoucherHandler) create(c *gin.Context) {
 	}
 	destID, _ := uuid.Parse(req.DestinationID)
 	v := &model.Voucher{
-		Title:           req.Title,
-		Description:     req.Description,
-		DestinationID:   destID,
-		Price:           req.Price,
-		Currency:        req.Currency,
-		DurationNights:  req.DurationNights,
-		IncludesFlight:  req.IncludesFlight,
-		IncludesHotel:   req.IncludesHotel,
-		IncludesMeal:    req.IncludesMeal,
-		ImageURL:        req.ImageURL,
-		IsActive:        req.IsActive,
+		Title:          req.Title,
+		Description:    req.Description,
+		DestinationID:  destID,
+		Price:          req.Price,
+		Currency:       req.Currency,
+		DurationNights: req.DurationNights,
+		IncludesFlight: req.IncludesFlight,
+		IncludesHotel:  req.IncludesHotel,
+		IncludesMeal:   req.IncludesMeal,
+		ImageURL:       req.ImageURL,
+		IsActive:       req.IsActive,
 	}
 	if err := h.voucherSvc.CreateVoucher(c.Request.Context(), v); err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
@@ -159,5 +159,3 @@ func (h *VoucherHandler) delete(c *gin.Context) {
 }
 
 var _ = strconv.Itoa
-
-

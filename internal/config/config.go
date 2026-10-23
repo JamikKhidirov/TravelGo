@@ -20,10 +20,10 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name        string `yaml:"name"`
-	Env         string `yaml:"env"`
-	Port        int    `yaml:"port"`
-	ReadTimeout string `yaml:"read_timeout"`
+	Name         string `yaml:"name"`
+	Env          string `yaml:"env"`
+	Port         int    `yaml:"port"`
+	ReadTimeout  string `yaml:"read_timeout"`
 	WriteTimeout string `yaml:"write_timeout"`
 }
 
@@ -46,10 +46,10 @@ type RedisConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers             []string `yaml:"brokers"`
-	TopicTravelEvents   string   `yaml:"topic_travel_events"`
-	TopicSync           string   `yaml:"topic_sync"`
-	ConsumerGroup       string   `yaml:"consumer_group"`
+	Brokers           []string `yaml:"brokers"`
+	TopicTravelEvents string   `yaml:"topic_travel_events"`
+	TopicSync         string   `yaml:"topic_sync"`
+	ConsumerGroup     string   `yaml:"consumer_group"`
 }
 
 type ServerConfig struct {
@@ -57,8 +57,8 @@ type ServerConfig struct {
 }
 
 type MockConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	BaseURL  string `yaml:"base_url"`
+	Enabled bool   `yaml:"enabled"`
+	BaseURL string `yaml:"base_url"`
 }
 
 func Load(path string) (*Config, error) {

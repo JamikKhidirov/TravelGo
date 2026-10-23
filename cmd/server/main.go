@@ -16,6 +16,7 @@ import (
 	"go-travel/internal/adapter/mock"
 	"go-travel/internal/adapter/msp2"
 	scraper "go-travel/internal/adapter/scraper"
+	"go-travel/internal/adapter/transport"
 	"go-travel/internal/broker"
 	"go-travel/internal/cache"
 	"go-travel/internal/config"
@@ -108,6 +109,8 @@ func main() {
 	mockSrc := mock.NewMockSource(cfg.Mock.BaseURL)
 	msp2Src := msp2.NewMSP2Source()
 	scraperSrc := scraper.NewCityAPISource()
+	flightSrc := transport.NewFlightSource()
+	railSrc := transport.NewRailSource()
 
 	travelSvc := service.NewTravelService(repo)
 	authSvc := service.NewAuthService(repo, "travel-secret")
@@ -116,7 +119,9 @@ func main() {
 	paymentSvc := service.NewPaymentService(repo)
 	reviewSvc := service.NewReviewService(repo)
 	voucherSvc := service.NewVoucherService(repo)
-	syncSvc := service.NewSyncService(repo, mockSrc, msp2Src, scraperSrc)
+	ticketSvc := service.NewTicketService(repo)
+	pushSvc := service.NewPushService(repo)
+	syncSvc := service.NewSyncService(repo, mockSrc, msp2Src, scraperSrc, flightSrc, railSrc)
 
 	_ = cacheStore
 	_ = eventBroker
@@ -128,7 +133,9 @@ func main() {
 	paymentH := handler.NewPaymentHandler(paymentSvc)
 	reviewH := handler.NewReviewHandler(reviewSvc)
 	voucherH := handler.NewVoucherHandler(voucherSvc)
-	adminH := handler.NewAdminHandler(repo, syncSvc, travelSvc, voucherSvc)
+	ticketH := handler.NewTicketHandler(ticketSvc, travelSvc, voucherSvc)
+	pushH := handler.NewPushHandler(pushSvc)
+	adminH := handler.NewAdminHandler(repo, syncSvc, travelSvc, voucherSvc, ticketSvc)
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
@@ -140,6 +147,9 @@ func main() {
 	})
 	r.GET("/swagger/doc.yaml", func(c *gin.Context) {
 		c.Data(http.StatusOK, "application/yaml", []byte(swaggerSpec))
+	})
+	r.GET("/admin", func(c *gin.Context) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(handler.AdminPanelHTML()))
 	})
 
 	h.RegisterRoutes(r)
@@ -155,6 +165,8 @@ func main() {
 	paymentH.RegisterRoutes(api)
 	reviewH.RegisterRoutes(api)
 	voucherH.RegisterRoutes(api)
+	ticketH.RegisterRoutes(api)
+	pushH.RegisterRoutes(api)
 	adminH.RegisterRoutes(api)
 
 	wsHub := handler.NewWSHub()
@@ -200,4 +212,3 @@ func main() {
 
 	slog.Info("server stopped")
 }
-

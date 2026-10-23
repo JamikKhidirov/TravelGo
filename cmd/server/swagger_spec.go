@@ -22,6 +22,8 @@ tags:
   - name: payments
   - name: reviews
   - name: vouchers
+  - name: tickets
+  - name: push
   - name: admin
   - name: realtime
 components:
@@ -273,6 +275,63 @@ components:
         error: { type: string }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    Ticket:
+      type: object
+      required: [type, origin_city, destination_city, departure_at, arrival_at, price]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        type: { type: string, enum: [flight, train, bus] }
+        provider: { type: string }
+        origin_city: { type: string, example: Moscow }
+        origin_country: { type: string, example: Russia }
+        destination_city: { type: string, example: Istanbul }
+        destination_country: { type: string, example: Turkey }
+        departure_at: { type: string, format: date-time }
+        arrival_at: { type: string, format: date-time }
+        price: { type: number, format: float, example: 250 }
+        currency: { type: string, example: USD }
+        carrier: { type: string, example: Aeroflot }
+        number: { type: string, example: FL501 }
+        class: { type: string, example: economy }
+        available_seats: { type: integer, example: 24 }
+        source: { type: string, readOnly: true }
+        external_id: { type: string, readOnly: true }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+    DeviceToken:
+      type: object
+      required: [platform, token]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        user_id: { type: string, format: uuid }
+        platform: { type: string, enum: [ios, android, web] }
+        token: { type: string, example: fcm-or-apns-token }
+        app_version: { type: string, example: 1.0.0 }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+    PushRequest:
+      type: object
+      required: [title, body]
+      properties:
+        user_id: { type: string, format: uuid, description: Empty means all devices }
+        platform: { type: string, enum: [ios, android, web] }
+        title: { type: string, example: GoTravel }
+        body: { type: string, example: New tours are available }
+        data: { type: object, additionalProperties: { type: string }, example: { screen: tours } }
+    PushNotification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string }
+        data: { type: string }
+        platform: { type: string }
+        status: { type: string }
+        sent_count: { type: integer }
+        failed_count: { type: integer }
+        created_at: { type: string, format: date-time }
 security:
   - bearerAuth: []
   - userHeader: []
@@ -838,6 +897,109 @@ paths:
       summary: List sync jobs
       responses:
         '200': { description: OK }
+  /api/v1/tickets:
+    get:
+      tags: [tickets]
+      summary: List and filter tickets
+      security: []
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [flight, train, bus] } }
+        - { name: origin, in: query, schema: { type: string } }
+        - { name: destination, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { description: OK }
+  /api/v1/tickets/search:
+    get:
+      tags: [tickets]
+      summary: Search tickets by city or carrier
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string, enum: [flight, train, bus] } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { description: OK }
+  /api/v1/tickets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [tickets]
+      summary: Get ticket
+      security: []
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /api/v1/cities/{city}/packages:
+    get:
+      tags: [tickets]
+      summary: City travel packages (destinations, tours, vouchers, tickets)
+      security: []
+      parameters:
+        - { name: city, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+  /api/v1/devices:
+    get:
+      tags: [push]
+      summary: List current user devices
+      responses:
+        '200': { description: OK }
+  /api/v1/devices/register:
+    post:
+      tags: [push]
+      summary: Register iOS or Android device token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceToken' }
+      responses:
+        '201': { description: Registered }
+  /api/v1/devices/{token}:
+    delete:
+      tags: [push]
+      summary: Unregister device token
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/push:
+    get:
+      tags: [push]
+      summary: Push notification history
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [push]
+      summary: Send push to one user or all devices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushRequest' }
+      responses:
+        '200': { description: Sent }
+  /api/v1/admin/push/provider:
+    get:
+      tags: [push]
+      summary: Current push provider
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/tickets:
+    post:
+      tags: [admin]
+      summary: Create ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Ticket' }
+      responses:
+        '201': { description: Created }
   /ws:
     get:
       tags: [realtime]
@@ -857,4 +1019,3 @@ paths:
       responses:
         '101': { description: Switching Protocols }
 `
-

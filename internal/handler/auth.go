@@ -188,9 +188,9 @@ func (h *CartHandler) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 type addToCartRequest struct {
-	TourID  string  `json:"tour_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"min=1"`
-	Price   float64 `json:"price" binding:"gt=0"`
+	TourID   string  `json:"tour_id" binding:"required"`
+	Quantity int     `json:"quantity" binding:"min=1"`
+	Price    float64 `json:"price" binding:"gt=0"`
 }
 
 func (h *CartHandler) list(c *gin.Context) {
@@ -297,15 +297,15 @@ func (h *CartHandler) updateItem(c *gin.Context) {
 }
 
 type checkoutRequest struct {
-	TourID         string    `json:"tour_id" binding:"required"`
-	DestinationID  string    `json:"destination_id" binding:"required"`
-	PassengerName  string    `json:"passenger_name" binding:"required"`
-	PassengerEmail string    `json:"passenger_email" binding:"required,email"`
-	PassengerPhone string    `json:"passenger_phone"`
-	TravelDate     string    `json:"travel_date" binding:"required"`
-	Nights         int       `json:"nights" binding:"min=1"`
-	Adults         int       `json:"adults" binding:"min=1"`
-	Children       int       `json:"children"`
+	TourID         string `json:"tour_id" binding:"required"`
+	DestinationID  string `json:"destination_id" binding:"required"`
+	PassengerName  string `json:"passenger_name" binding:"required"`
+	PassengerEmail string `json:"passenger_email" binding:"required,email"`
+	PassengerPhone string `json:"passenger_phone"`
+	TravelDate     string `json:"travel_date" binding:"required"`
+	Nights         int    `json:"nights" binding:"min=1"`
+	Adults         int    `json:"adults" binding:"min=1"`
+	Children       int    `json:"children"`
 }
 
 func (h *CartHandler) checkout(c *gin.Context) {
@@ -346,7 +346,6 @@ func (h *CartHandler) checkout(c *gin.Context) {
 var _ = strconv.Itoa
 var _ = time.Time{}
 
-
 func userIDFromContext(c *gin.Context) string {
 	if v, ok := c.Get("user_id"); ok {
 		if s, ok := v.(string); ok && s != "" {
@@ -358,7 +357,3 @@ func userIDFromContext(c *gin.Context) string {
 	}
 	return ""
 }
-
-
-
-

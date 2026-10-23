@@ -41,12 +41,12 @@ type Tour struct {
 }
 
 type TravelEvent struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	Type      string    `json:"type" db:"type" validate:"required"` // destination_created, tour_updated, price_changed, etc.
-	Aggregate string    `json:"aggregate" db:"aggregate"`
+	ID          uuid.UUID `json:"id" db:"id"`
+	Type        string    `json:"type" db:"type" validate:"required"` // destination_created, tour_updated, price_changed, etc.
+	Aggregate   string    `json:"aggregate" db:"aggregate"`
 	AggregateID uuid.UUID `json:"aggregate_id" db:"aggregate_id"`
-	Payload   string    `json:"payload" db:"payload"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	Payload     string    `json:"payload" db:"payload"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 
 type SyncJob struct {

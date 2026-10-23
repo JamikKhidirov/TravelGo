@@ -19,10 +19,10 @@ type GeoLocation struct {
 }
 
 type WSClient struct {
-	ID       string    `json:"id"`
-	UserID   string    `json:"user_id"`
-	Name     string    `json:"name"`
-	Room     string    `json:"room"`
+	ID       string      `json:"id"`
+	UserID   string      `json:"user_id"`
+	Name     string      `json:"name"`
+	Room     string      `json:"room"`
 	Location GeoLocation `json:"location"`
 	Conn     *websocket.Conn
 	Send     chan []byte

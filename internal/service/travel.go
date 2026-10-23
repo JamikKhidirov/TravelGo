@@ -109,7 +109,6 @@ func mustJSON(v interface{}) string {
 	return string(b)
 }
 
-
 func (s *TravelService) UpdateDestination(ctx context.Context, d *model.Destination) error {
 	if err := validateDestination(d); err != nil {
 		return err
@@ -190,9 +189,6 @@ func (s *TravelService) TopDestinations(ctx context.Context, limit int) ([]model
 	return dests, nil
 }
 
-
-
 func (s *TravelService) ListCountries(ctx context.Context) ([]string, error) {
 	return s.repo.DistinctCountries(ctx)
 }
-

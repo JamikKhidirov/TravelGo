@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,7 +12,7 @@ import (
 )
 
 type SyncService struct {
-	repo   *repository.TravelRepository
+	repo    *repository.TravelRepository
 	sources []Source
 }
 
@@ -21,25 +22,28 @@ type Source interface {
 	FetchTours(context.Context) ([]model.Tour, error)
 }
 
+type TicketSource interface {
+	FetchTickets(context.Context) ([]model.Ticket, error)
+}
+
 func NewSyncService(repo *repository.TravelRepository, sources ...Source) *SyncService {
 	return &SyncService{repo: repo, sources: sources}
 }
 
 func (s *SyncService) SyncAll(ctx context.Context) error {
-	var lastErr error
 	for _, src := range s.sources {
 		if err := s.syncSource(ctx, src); err != nil {
-			lastErr = err
+			log.Printf("sync source %s failed: %v", src.Name(), err)
 		}
 	}
-	return lastErr
+	return nil
 }
 
 func (s *SyncService) syncSource(ctx context.Context, src Source) error {
 	job := &model.SyncJob{
-		ID:      uuid.New(),
-		Source:  src.Name(),
-		Status:  "running",
+		ID:        uuid.New(),
+		Source:    src.Name(),
+		Status:    "running",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -78,6 +82,20 @@ func (s *SyncService) syncSource(ctx context.Context, src Source) error {
 		total++
 	}
 
+	if ts, ok := src.(TicketSource); ok {
+		tickets, err := ts.FetchTickets(ctx)
+		if err != nil {
+			s.repo.UpdateSyncJob(ctx, job.ID, "failed", total, err.Error())
+			return fmt.Errorf("fetch tickets from %s: %w", src.Name(), err)
+		}
+		for _, ticket := range tickets {
+			if err := s.repo.CreateTicket(ctx, &ticket); err != nil {
+				continue
+			}
+			total++
+		}
+	}
+
 	if err := s.repo.UpdateSyncJob(ctx, job.ID, "completed", total, ""); err != nil {
 		return err
 	}
@@ -105,4 +123,3 @@ func (s *SyncService) GetJobsBySource(ctx context.Context, source string) ([]mod
 var _ interface {
 	SyncAll(context.Context) error
 } = (*SyncService)(nil)
-

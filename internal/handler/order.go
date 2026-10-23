@@ -100,5 +100,3 @@ func (h *OrderHandler) updateStatus(c *gin.Context) {
 }
 
 var _ = time.Now
-
-

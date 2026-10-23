@@ -18,9 +18,9 @@ type Event struct {
 // It implements the same Publish/Subscribe contract as the Kafka broker so the
 // rest of the application does not need to change.
 type MemoryBroker struct {
-	mu       sync.Mutex
+	mu          sync.Mutex
 	subscribers []chan Event
-	closed   bool
+	closed      bool
 }
 
 func NewMemoryBroker() *MemoryBroker {

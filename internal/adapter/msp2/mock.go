@@ -94,3 +94,62 @@ var _ interface {
 	FetchDestinations(context.Context) ([]model.Destination, error)
 	FetchTours(context.Context) ([]model.Tour, error)
 } = (*MSP2Source)(nil)
+
+func (s *MSP2Source) FetchTickets(ctx context.Context) ([]model.Ticket, error) {
+	routes := []struct {
+		From, FromCountry, To, ToCountry string
+	}{
+		{"New York", "USA", "London", "United Kingdom"},
+		{"London", "United Kingdom", "Paris", "France"},
+		{"Dubai", "UAE", "Moscow", "Russia"},
+		{"Tokyo", "Japan", "Seoul", "South Korea"},
+		{"Barcelona", "Spain", "Lisbon", "Portugal"},
+		{"Istanbul", "Turkey", "Berlin", "Germany"},
+		{"Moscow", "Russia", "Yerevan", "Armenia"},
+		{"Almaty", "Kazakhstan", "Moscow", "Russia"},
+	}
+	types := []string{"flight", "train"}
+	now := time.Now()
+	var tickets []model.Ticket
+	for i := 0; i < 16; i++ {
+		r := routes[i%len(routes)]
+		t := types[i%len(types)]
+		departure := now.Add(time.Duration(10+i*5) * time.Hour)
+		duration := time.Duration(2+i%10) * time.Hour
+		if t == "train" {
+			duration = time.Duration(6+i%14) * time.Hour
+		}
+		carrier := "MSP2 Air"
+		number := fmt.Sprintf("M2-%d", 200+i)
+		class := "economy"
+		if t == "train" {
+			carrier = "MSP2 Rail"
+			number = fmt.Sprintf("M2R-%d", 300+i)
+			class = "second"
+		}
+		tickets = append(tickets, model.Ticket{
+			ID:                 uuid.New(),
+			Type:               t,
+			Provider:           s.Name(),
+			OriginCity:         r.From,
+			OriginCountry:      r.FromCountry,
+			DestinationCity:    r.To,
+			DestinationCountry: r.ToCountry,
+			DepartureAt:        departure,
+			ArrivalAt:          departure.Add(duration),
+			Price:              120 + s.rand.Float64()*900,
+			Currency:           "USD",
+			Carrier:            carrier,
+			Number:             number,
+			Class:              class,
+			AvailableSeats:     10 + s.rand.Intn(80),
+			Source:             s.Name(),
+			ExternalID:         fmt.Sprintf("%s:ticket:%d", s.Name(), i),
+		})
+	}
+	return tickets, nil
+}
+
+var _ interface {
+	FetchTickets(context.Context) ([]model.Ticket, error)
+} = (*MSP2Source)(nil)

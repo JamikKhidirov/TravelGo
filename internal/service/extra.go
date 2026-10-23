@@ -13,7 +13,7 @@ import (
 )
 
 type AuthService struct {
-	repo *repository.TravelRepository
+	repo      *repository.TravelRepository
 	jwtSecret []byte
 }
 
@@ -203,6 +203,7 @@ func (s *ReviewService) AddReview(ctx context.Context, rv *model.Review) error {
 	}
 	return s.repo.CreateReview(ctx, rv)
 }
+
 type VoucherService struct {
 	repo *repository.TravelRepository
 }
@@ -229,15 +230,9 @@ func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error 
 	return s.repo.DeleteVoucher(ctx, id)
 }
 
-
-
 func (s *AuthService) GetUser(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	return s.repo.GetUserByID(ctx, id)
 }
-
-
-
-
 
 func (s *CartService) ClearCart(ctx context.Context, userID uuid.UUID) error {
 	cart, err := s.GetOrCreateCart(ctx, userID)
@@ -255,19 +250,13 @@ func (s *CartService) UpdateCartItem(ctx context.Context, userID, itemID uuid.UU
 	return s.repo.UpdateCartItemQuantity(ctx, cart.ID, itemID, quantity)
 }
 
-
-
 func (s *OrderService) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	return s.repo.UpdateOrderStatus(ctx, id, status)
 }
 
-
-
 func (s *ReviewService) DeleteReview(ctx context.Context, id uuid.UUID) error {
 	return s.repo.DeleteReview(ctx, id)
 }
-
-
 
 func (s *ReviewService) ListReviews(ctx context.Context, tourID uuid.UUID) ([]model.Review, error) {
 	return s.repo.GetReviewsByTour(ctx, tourID)
@@ -276,7 +265,6 @@ func (s *ReviewService) ListReviews(ctx context.Context, tourID uuid.UUID) ([]mo
 func (s *VoucherService) ListVouchers(ctx context.Context, destID *uuid.UUID, p *model.Pagination) ([]model.Voucher, int, error) {
 	return s.repo.GetVouchers(ctx, destID, p)
 }
-
 
 func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	u, err := s.repo.GetUserByID(ctx, userID)
@@ -297,9 +285,6 @@ func (s *AuthService) RefreshToken(ctx context.Context, userID uuid.UUID, role s
 	return s.generateToken(userID, role)
 }
 
-
-
-
 func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) (*model.User, error) {
 	u, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -319,5 +304,3 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, first
 	}
 	return s.repo.GetUserByID(ctx, userID)
 }
-
-

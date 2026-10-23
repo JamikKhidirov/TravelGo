@@ -1,0 +1,9 @@
+.env
+.env.*
+dist/
+tmp/
+*.exe
+*.log
+*.out
+.DS_Store
+Thumbs.db

@@ -15,10 +15,11 @@ type AdminHandler struct {
 	syncSvc    *service.SyncService
 	travelSvc  *service.TravelService
 	voucherSvc *service.VoucherService
+	ticketSvc  *service.TicketService
 }
 
-func NewAdminHandler(repo *repository.TravelRepository, syncSvc *service.SyncService, travelSvc *service.TravelService, voucherSvc *service.VoucherService) *AdminHandler {
-	return &AdminHandler{repo: repo, syncSvc: syncSvc, travelSvc: travelSvc, voucherSvc: voucherSvc}
+func NewAdminHandler(repo *repository.TravelRepository, syncSvc *service.SyncService, travelSvc *service.TravelService, voucherSvc *service.VoucherService, ticketSvc *service.TicketService) *AdminHandler {
+	return &AdminHandler{repo: repo, syncSvc: syncSvc, travelSvc: travelSvc, voucherSvc: voucherSvc, ticketSvc: ticketSvc}
 }
 
 func (h *AdminHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -32,6 +33,7 @@ func (h *AdminHandler) RegisterRoutes(r *gin.RouterGroup) {
 		admin.POST("/destinations", h.createDestination)
 		admin.POST("/tours", h.createTour)
 		admin.POST("/vouchers", h.createVoucher)
+		admin.POST("/tickets", h.createTicket)
 		admin.GET("/sync-jobs", h.listSyncJobs)
 	}
 }
@@ -42,11 +44,17 @@ func (h *AdminHandler) stats(c *gin.Context) {
 	users, _ := h.repo.CountUsers(c.Request.Context())
 	orders, _ := h.repo.CountOrders(c.Request.Context())
 	revenue, _ := h.repo.SumRevenue(c.Request.Context())
+	tickets, _ := h.repo.CountTickets(c.Request.Context())
+	devices, _ := h.repo.CountDevices(c.Request.Context())
+	pushes, _ := h.repo.CountPushNotifications(c.Request.Context())
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{
 		"destinations": dests,
 		"tours":        tours,
 		"users":        users,
 		"orders":       orders,
+		"tickets":      tickets,
+		"devices":      devices,
+		"pushes":       pushes,
 		"revenue":      revenue,
 	}})
 }
@@ -148,6 +156,19 @@ func (h *AdminHandler) createVoucher(c *gin.Context) {
 	c.JSON(http.StatusCreated, model.Response{Success: true, Data: v})
 }
 
+func (h *AdminHandler) createTicket(c *gin.Context) {
+	var t model.Ticket
+	if err := c.ShouldBindJSON(&t); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if err := h.ticketSvc.Create(c.Request.Context(), &t); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, model.Response{Success: true, Data: t})
+}
+
 func (h *AdminHandler) listSyncJobs(c *gin.Context) {
 	jobs, err := h.repo.GetSyncJobs(c.Request.Context(), 100)
 	if err != nil {
@@ -156,7 +177,3 @@ func (h *AdminHandler) listSyncJobs(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: jobs})
 }
-
-
-
-

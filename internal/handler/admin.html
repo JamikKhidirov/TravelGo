@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GoTravel Admin</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --card:#151c33; --line:#26304f; --text:#e8eeff; --muted:#8ea0c9; --accent:#4f8cff; --ok:#22c55e; --bad:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: radial-gradient(1200px 600px at 20% -10%, #1b2a5e 0%, var(--bg) 55%); color:var(--text); min-height:100vh; }
+    header { padding:32px 20px 12px; text-align:center; }
+    h1 { margin:0; font-size:34px; letter-spacing:-0.02em; }
+    h1 span { color:var(--accent); }
+    .sub { color:var(--muted); margin-top:8px; }
+    .wrap { max-width:1100px; margin:0 auto; padding:20px; display:grid; gap:18px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)) , var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; box-shadow:0 20px 50px rgba(0,0,0,0.35); }
+    .card h2 { margin:0 0 14px; font-size:18px; }
+    label { display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; text-transform:uppercase; letter-spacing:0.08em; }
+    input, textarea, select { width:100%; background:#0e142a; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; outline:none; }
+    input:focus, textarea:focus, select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(79,140,255,0.18); }
+    textarea { min-height:80px; resize:vertical; }
+    button { cursor:pointer; border:0; border-radius:10px; padding:11px 16px; font-weight:650; color:white; background:linear-gradient(135deg,#4f8cff,#7c5cff); margin-top:12px; width:100%; }
+    button.secondary { background:#222d4d; }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .stat { background:#0e142a; border:1px solid var(--line); border-radius:12px; padding:12px; }
+    .stat b { display:block; font-size:22px; }
+    .stat span { color:var(--muted); font-size:12px; }
+    pre { background:#0a0f21; border:1px solid var(--line); border-radius:12px; padding:12px; overflow:auto; max-height:320px; font-size:12px; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#12224a; color:#9cc0ff; font-size:12px; }
+    .ok { color:var(--ok); } .bad { color:var(--bad); }
+    a { color:#8db4ff; }
+    footer { text-align:center; color:var(--muted); padding:24px; font-size:13px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>GoTravel <span>Admin</span></h1>
+  <div class="sub">Destinations, tickets, sync, push notifications</div>
+</header>
+<div class="wrap">
+  <section class="card">
+    <h2>Access</h2>
+    <label>Admin token</label>
+    <input id="token" placeholder="travel-token-...-admin-..." />
+    <label>Admin user ID</label>
+    <input id="userId" placeholder="uuid" />
+    <button class="secondary" onclick="saveAuth()">Save credentials</button>
+    <p class="sub" style="margin-top:12px">Credentials are stored in localStorage. <a href="/swagger/index.html">Open Swagger</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Statistics</h2>
+    <div id="stats" class="stats"></div>
+    <button onclick="loadStats()">Refresh stats</button>
+    <p id="pushProvider" class="pill" style="margin-top:12px">provider: ...</p>
+  </section>
+
+  <section class="card">
+    <h2>Send push</h2>
+    <label>User ID (empty = all devices)</label>
+    <input id="target" placeholder="uuid or empty" />
+    <div class="row">
+      <div>
+        <label>Platform</label>
+        <select id="platform">
+          <option value="">all</option>
+          <option value="android">android</option>
+          <option value="ios">ios</option>
+          <option value="web">web</option>
+        </select>
+      </div>
+      <div>
+        <label>Data JSON</label>
+        <input id="data" value='{"screen":"tours"}' />
+      </div>
+    </div>
+    <label>Title</label>
+    <input id="title" value="GoTravel" />
+    <label>Body</label>
+    <textarea id="body">New tours and tickets are available!</textarea>
+    <button onclick="sendPush()">Send notification</button>
+  </section>
+
+  <section class="card">
+    <h2>Response</h2>
+    <pre id="output">Ready.</pre>
+    <button class="secondary" onclick="loadHistory()">Load push history</button>
+    <pre id="history" style="margin-top:12px">No history loaded.</pre>
+  </section>
+</div>
+<footer>GoTravel API · <a href="/health">health</a> · <a href="/swagger/index.html">swagger</a></footer>
+<script>
+const $ = (id) => document.getElementById(id);
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  const token = $("token").value.trim();
+  const userId = $("userId").value.trim();
+  if (token) h["Authorization"] = "Bearer " + token;
+  if (userId) h["X-User-Id"] = userId;
+  return h;
+}
+function saveAuth() {
+  localStorage.setItem("admin_token", $("token").value.trim());
+  localStorage.setItem("admin_user", $("userId").value.trim());
+  $("output").textContent = "Credentials saved.";
+}
+function show(data) { $("output").textContent = JSON.stringify(data, null, 2); }
+async function call(path, options) {
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  show({ status: res.status, data });
+  return data;
+}
+async function loadStats() {
+  const data = await call("/api/v1/admin/stats", { headers: headers() });
+  const d = (data && data.data) || {};
+  const labels = [["destinations","Destinations"],["tours","Tours"],["tickets","Tickets"],["users","Users"],["orders","Orders"],["devices","Devices"],["pushes","Pushes"],["revenue","Revenue"]];
+  $("stats").innerHTML = labels.map(([k,label]) => `<div class="stat"><b>${d[k] ?? 0}</b><span>${label}</span></div>`).join("");
+}
+async function sendPush() {
+  let data = {};
+  try { data = JSON.parse($("data").value || "{}"); } catch (e) { show({ error: "Invalid data JSON" }); return; }
+  const payload = {
+    user_id: $("target").value.trim(),
+    platform: $("platform").value,
+    title: $("title").value.trim(),
+    body: $("body").value.trim(),
+    data
+  };
+  const res = await call("/api/v1/admin/push", { method: "POST", headers: headers(), body: JSON.stringify(payload) });
+  if (res && res.data) $("output").className = "ok";
+}
+async function loadHistory() {
+  const res = await fetch("/api/v1/admin/push", { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  $("history").textContent = JSON.stringify(data, null, 2);
+}
+async function loadProvider() {
+  const res = await fetch("/api/v1/admin/push/provider", { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  $("pushProvider").textContent = "provider: " + ((data.data && data.data.provider) || "unknown");
+}
+(function init() {
+  $("token").value = localStorage.getItem("admin_token") || "";
+  $("userId").value = localStorage.getItem("admin_user") || "";
+  loadStats();
+  loadProvider();
+})();
+</script>
+</body>
+</html>

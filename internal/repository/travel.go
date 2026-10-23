@@ -74,6 +74,29 @@ func (r *TravelRepository) Migrate(ctx context.Context) error {
 		updated_at TIMESTAMPTZ DEFAULT NOW()
 	);
 
+	CREATE TABLE IF NOT EXISTS tickets (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		type VARCHAR(20) NOT NULL,
+		provider VARCHAR(100),
+		origin_city VARCHAR(100) NOT NULL,
+		origin_country VARCHAR(100),
+		destination_city VARCHAR(100) NOT NULL,
+		destination_country VARCHAR(100),
+		departure_at TIMESTAMPTZ NOT NULL,
+		arrival_at TIMESTAMPTZ NOT NULL,
+		price NUMERIC(10,2) NOT NULL,
+		currency VARCHAR(10) DEFAULT 'USD',
+		carrier VARCHAR(100),
+		number VARCHAR(50),
+		class VARCHAR(50),
+		available_seats INTEGER DEFAULT 0,
+		source VARCHAR(100),
+		external_id VARCHAR(255),
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		updated_at TIMESTAMPTZ DEFAULT NOW(),
+		UNIQUE(source, external_id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_destinations_country_city ON destinations(country, city);
 	CREATE INDEX IF NOT EXISTS idx_destinations_source_ext ON destinations(source, external_id);
 	CREATE INDEX IF NOT EXISTS idx_tours_destination ON tours(destination_id);
@@ -82,6 +105,9 @@ func (r *TravelRepository) Migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_travel_events_type ON travel_events(type);
 	CREATE INDEX IF NOT EXISTS idx_travel_events_created ON travel_events(created_at);
 	CREATE INDEX IF NOT EXISTS idx_sync_jobs_status ON sync_jobs(status);
+	CREATE INDEX IF NOT EXISTS idx_tickets_route ON tickets(type, origin_city, destination_city);
+	CREATE INDEX IF NOT EXISTS idx_tickets_departure ON tickets(departure_at);
+	CREATE INDEX IF NOT EXISTS idx_tickets_source_ext ON tickets(source, external_id);
 	`
 
 	_, err := r.db.ExecContext(ctx, schema)

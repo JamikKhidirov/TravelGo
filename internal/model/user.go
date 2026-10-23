@@ -68,28 +68,28 @@ type Review struct {
 }
 
 type Payment struct {
-	ID             uuid.UUID `json:"id" db:"id"`
-	OrderID        uuid.UUID `json:"order_id" db:"order_id" validate:"required"`
-	Amount         float64   `json:"amount" db:"amount" validate:"gt=0"`
-	Currency       string    `json:"currency" db:"currency"`
-	Status         string    `json:"status" db:"status" validate:"required,oneof=pending success failed"`
-	Provider       string    `json:"provider" db:"provider"`
-	TransactionID  string    `json:"transaction_id" db:"transaction_id"`
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+	ID            uuid.UUID `json:"id" db:"id"`
+	OrderID       uuid.UUID `json:"order_id" db:"order_id" validate:"required"`
+	Amount        float64   `json:"amount" db:"amount" validate:"gt=0"`
+	Currency      string    `json:"currency" db:"currency"`
+	Status        string    `json:"status" db:"status" validate:"required,oneof=pending success failed"`
+	Provider      string    `json:"provider" db:"provider"`
+	TransactionID string    `json:"transaction_id" db:"transaction_id"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
 type Voucher struct {
-	ID            uuid.UUID `json:"id" db:"id"`
-	Title         string    `json:"title" db:"title" validate:"required"`
-	Description   string    `json:"description" db:"description"`
-	DestinationID uuid.UUID `json:"destination_id" db:"destination_id" validate:"required"`
-	Price         float64   `json:"price" db:"price" validate:"gt=0"`
-	Currency      string    `json:"currency" db:"currency"`
-	DurationNights int      `json:"duration_nights" db:"duration_nights" validate:"min=1"`
-	IncludesFlight  bool      `json:"includes_flight" db:"includes_flight"`
-	IncludesHotel   bool      `json:"includes_hotel" db:"includes_hotel"`
-	IncludesMeal    bool      `json:"includes_meal" db:"includes_meal"`
-	ImageURL      string    `json:"image_url" db:"image_url"`
-	IsActive      bool      `json:"is_active" db:"is_active"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	ID             uuid.UUID `json:"id" db:"id"`
+	Title          string    `json:"title" db:"title" validate:"required"`
+	Description    string    `json:"description" db:"description"`
+	DestinationID  uuid.UUID `json:"destination_id" db:"destination_id" validate:"required"`
+	Price          float64   `json:"price" db:"price" validate:"gt=0"`
+	Currency       string    `json:"currency" db:"currency"`
+	DurationNights int       `json:"duration_nights" db:"duration_nights" validate:"min=1"`
+	IncludesFlight bool      `json:"includes_flight" db:"includes_flight"`
+	IncludesHotel  bool      `json:"includes_hotel" db:"includes_hotel"`
+	IncludesMeal   bool      `json:"includes_meal" db:"includes_meal"`
+	ImageURL       string    `json:"image_url" db:"image_url"`
+	IsActive       bool      `json:"is_active" db:"is_active"`
+	CreatedAt      time.Time `json:"created_at" db:"created_at"`
 }

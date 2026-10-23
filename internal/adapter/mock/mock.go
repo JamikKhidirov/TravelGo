@@ -116,6 +116,67 @@ func (m *MockSource) FetchTours(ctx context.Context) ([]model.Tour, error) {
 	return tours, nil
 }
 
+// FetchTickets returns demo flight, train and bus tickets for the mock MSP.
+func (m *MockSource) FetchTickets(ctx context.Context) ([]model.Ticket, error) {
+	routes := []struct {
+		From, FromCountry, To, ToCountry string
+	}{
+		{"Moscow", "Russia", "Saint Petersburg", "Russia"},
+		{"Moscow", "Russia", "Sochi", "Russia"},
+		{"Kazan", "Russia", "Moscow", "Russia"},
+		{"Paris", "France", "Rome", "Italy"},
+		{"Berlin", "Germany", "Madrid", "Spain"},
+		{"London", "United Kingdom", "Dubai", "UAE"},
+		{"Rome", "Italy", "Paris", "France"},
+		{"Sochi", "Russia", "Kazan", "Russia"},
+	}
+	carriers := map[string][]string{
+		"flight": {"Mock Airways", "SkyLine", "AeroMock"},
+		"train":  {"Mock Rail", "ExpressRail", "NightTrain"},
+		"bus":    {"MockBus", "CityCoach"},
+	}
+	types := []string{"flight", "train", "bus"}
+	now := time.Now()
+	var tickets []model.Ticket
+	for i := 0; i < 24; i++ {
+		r := routes[i%len(routes)]
+		typ := types[i%len(types)]
+		departure := now.Add(time.Duration(6+i*3) * time.Hour)
+		duration := time.Duration(1+i%8) * time.Hour
+		if typ == "train" {
+			duration = time.Duration(4+i%12) * time.Hour
+		}
+		if typ == "bus" {
+			duration = time.Duration(8+i%20) * time.Hour
+		}
+		cs := carriers[typ]
+		tickets = append(tickets, model.Ticket{
+			ID:                 uuid.New(),
+			Type:               typ,
+			Provider:           m.Name(),
+			OriginCity:         r.From,
+			OriginCountry:      r.FromCountry,
+			DestinationCity:    r.To,
+			DestinationCountry: r.ToCountry,
+			DepartureAt:        departure,
+			ArrivalAt:          departure.Add(duration),
+			Price:              50 + m.rand.Float64()*700,
+			Currency:           "USD",
+			Carrier:            cs[m.rand.Intn(len(cs))],
+			Number:             fmt.Sprintf("%s-%d", map[string]string{"flight": "FL", "train": "TR", "bus": "BS"}[typ], 100+i),
+			Class:              map[string]string{"flight": "economy", "train": "second", "bus": "standard"}[typ],
+			AvailableSeats:     5 + m.rand.Intn(60),
+			Source:             m.Name(),
+			ExternalID:         fmt.Sprintf("%s:ticket:%d", m.Name(), i),
+		})
+	}
+	return tickets, nil
+}
+
+var _ interface {
+	FetchTickets(context.Context) ([]model.Ticket, error)
+} = (*MockSource)(nil)
+
 // MockDestinationsToJSON сериализует направления в JSON (для отладки/экспорта).
 func MockDestinationsToJSON(destinations []model.Destination) ([]byte, error) {
 	return json.Marshal(destinations)

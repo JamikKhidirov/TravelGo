@@ -50,6 +50,7 @@ services:
       DB_NAME: travel_db
       REDIS_ADDR: redis:6379
       KAFKA_BROKERS: localhost:9092
+      FCM_SERVER_KEY: ${FCM_SERVER_KEY:-}
     volumes:
       - ./configs/config.yaml:/configs/config.yaml
     restart: unless-stopped

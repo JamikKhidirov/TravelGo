@@ -88,5 +88,3 @@ func (h *ReviewHandler) list(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: reviews})
 }
-
-
