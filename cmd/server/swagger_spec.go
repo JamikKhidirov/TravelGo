@@ -4,7 +4,7 @@ const swaggerSpec = `openapi: 3.0.3
 info:
   title: GoTravel API
   description: Travel service in Go. Aggregates destinations and tours from multiple MSP servers, stores data in PostgreSQL, caches in Redis, streams realtime geolocation over WebSocket and exposes REST endpoints.
-  version: 1.3.0
+  version: 1.4.0
 servers:
   - url: http://localhost:8080
     description: Local Docker
@@ -17,6 +17,10 @@ tags:
   - name: events
   - name: sync
   - name: auth
+  - name: sessions
+  - name: mfa
+  - name: passkeys
+  - name: oauth
   - name: cart
   - name: orders
   - name: payments
@@ -81,13 +85,23 @@ components:
         first_name: { type: string, example: John }
         last_name: { type: string, example: Doe }
         phone: { type: string, example: "+1234567890" }
-        role: { type: string, enum: [user, admin], default: user }
+        role: { type: string, enum: [user, guide, partner], default: user, description: Admin accounts are provisioned by the operator }
     LoginRequest:
       type: object
       required: [email, password]
       properties:
         email: { type: string, format: email, example: user@example.com }
         password: { type: string, example: password123 }
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string, description: HS256 JWT access token }
+        token: { type: string, description: Legacy alias of access_token }
+        refresh_token: { type: string, description: Opaque rotating refresh token }
+        id_token: { type: string, description: OIDC ID token (HS256) }
+        token_type: { type: string, example: Bearer }
+        expires_in: { type: integer, example: 1800 }
+        session_id: { type: string, format: uuid }
     AuthResponse:
       type: object
       properties:
@@ -95,7 +109,108 @@ components:
           $ref: '#/components/schemas/User'
         token:
           type: string
-          example: travel-token-uuid-user-1700000000
+          description: Legacy alias of tokens.access_token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        tokens:
+          $ref: '#/components/schemas/TokenPair'
+    MFALoginRequest:
+      type: object
+      required: [mfa_token, code]
+      properties:
+        mfa_token: { type: string, description: Short-lived token returned by /auth/login when MFA is enabled }
+        code: { type: string, minLength: 6, maxLength: 6, example: "123456" }
+    MFARequiredResponse:
+      type: object
+      properties:
+        mfa_required: { type: boolean, example: true }
+        mfa_token: { type: string }
+        user_id: { type: string, format: uuid }
+    MFAVerifyRequest:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 6, maxLength: 6, example: "123456" }
+    MFASetupResponse:
+      type: object
+      properties:
+        secret: { type: string, example: JBSWY3DPEHPK3PXP }
+        otpauth_url: { type: string, example: "otpauth://totp/GoTravel:user@example.com?secret=...&issuer=GoTravel" }
+        issuer: { type: string, example: GoTravel }
+        digits: { type: integer, example: 6 }
+        period: { type: integer, example: 30 }
+        algorithm: { type: string, example: SHA1 }
+    SessionInfo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        device: { type: string, example: iPhone 15 }
+        device_name: { type: string }
+        platform: { type: string, enum: [ios, android, web] }
+        ip: { type: string, example: 203.0.113.10 }
+        user_agent: { type: string }
+        login_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        is_current: { type: boolean }
+        is_active: { type: boolean }
+    SessionsResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items: { $ref: '#/components/schemas/SessionInfo' }
+        summary:
+          type: object
+          properties:
+            total_sessions: { type: integer }
+            active_sessions: { type: integer }
+            platforms: { type: object, additionalProperties: { type: integer } }
+            unique_ips: { type: array, items: { type: string } }
+            last_login_at: { type: string, format: date-time }
+            last_activity_at: { type: string, format: date-time }
+            current_session_id: { type: string, format: uuid }
+    PasskeyRegistrationFinishRequest:
+      type: object
+      required: [credential_id, challenge_token]
+      properties:
+        credential_id: { type: string, description: Base64url credential ID }
+        client_data_json: { type: string, description: Base64url clientDataJSON }
+        attestation_object: { type: string }
+        transports: { type: string, example: internal }
+        challenge_token: { type: string, description: Token from passkeys/register/begin }
+    PasskeyLoginFinishRequest:
+      type: object
+      required: [credential_id, challenge_token]
+      properties:
+        credential_id: { type: string }
+        client_data_json: { type: string }
+        challenge_token: { type: string }
+    OAuthAuthorizeRequest:
+      type: object
+      required: [client_id, redirect_uri, code_challenge]
+      properties:
+        response_type: { type: string, enum: [code], default: code }
+        client_id: { type: string, example: gotravel-mobile }
+        redirect_uri: { type: string, example: "gotravel://callback" }
+        scope: { type: string, example: "openid profile email offline_access" }
+        state: { type: string }
+        code_challenge: { type: string, description: Base64url SHA-256 of the PKCE verifier }
+        code_challenge_method: { type: string, enum: [S256], default: S256 }
+        nonce: { type: string }
+        email: { type: string, description: Optional when a Bearer token is supplied }
+        password: { type: string }
+    OAuthTokenRequest:
+      type: object
+      required: [grant_type]
+      properties:
+        grant_type: { type: string, enum: [authorization_code, refresh_token] }
+        code: { type: string }
+        redirect_uri: { type: string }
+        client_id: { type: string }
+        code_verifier: { type: string }
+        refresh_token: { type: string }
     ChangePasswordRequest:
       type: object
       required: [old_password, new_password]
@@ -604,7 +719,308 @@ paths:
   /api/v1/auth/refresh:
     post:
       tags: [auth]
-      summary: Refresh token
+      summary: Rotate refresh token
+      description: Rotates the opaque refresh token and returns a fresh token pair bound to the same session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200': { description: OK }
+        '401': { description: Invalid or expired refresh token }
+  /api/v1/auth/login/mfa:
+    post:
+      tags: [auth, mfa]
+      summary: Complete login with a TOTP code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MFALoginRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { description: Invalid MFA code or token }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth, sessions]
+      summary: Revoke the current session
+      responses:
+        '200': { description: Session revoked }
+        '401': { description: Unauthorized }
+  /api/v1/auth/logout-all:
+    post:
+      tags: [auth, sessions]
+      summary: Log out on all devices
+      description: Revokes every active session and refresh token of the current user.
+      responses:
+        '200': { description: All sessions revoked }
+        '401': { description: Unauthorized }
+  /api/v1/auth/sessions:
+    get:
+      tags: [sessions]
+      summary: List sessions and devices of the current account
+      description: Returns per-session device, platform, IP and login time plus a summary with device counts.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SessionsResponse' }
+        '401': { description: Unauthorized }
+  /api/v1/auth/devices:
+    get:
+      tags: [sessions]
+      summary: Alias of /auth/sessions
+      responses:
+        '200': { description: OK }
+        '401': { description: Unauthorized }
+  /api/v1/auth/sessions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    delete:
+      tags: [sessions]
+      summary: Revoke a specific session
+      responses:
+        '200': { description: Session revoked }
+        '401': { description: Unauthorized }
+        '404': { description: Session not found }
+  /api/v1/auth/mfa/status:
+    get:
+      tags: [mfa]
+      summary: MFA status of the current user
+      responses:
+        '200': { description: OK }
+        '401': { description: Unauthorized }
+  /api/v1/auth/mfa/setup:
+    post:
+      tags: [mfa]
+      summary: Start TOTP enrollment
+      description: Returns a base32 secret and otpauth URL compatible with Google Authenticator.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MFASetupResponse' }
+        '401': { description: Unauthorized }
+  /api/v1/auth/mfa/enable:
+    post:
+      tags: [mfa]
+      summary: Confirm TOTP enrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MFAVerifyRequest' }
+      responses:
+        '200': { description: MFA enabled }
+        '400': { description: Invalid code }
+  /api/v1/auth/mfa/disable:
+    post:
+      tags: [mfa]
+      summary: Disable TOTP for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MFAVerifyRequest' }
+      responses:
+        '200': { description: MFA disabled }
+        '400': { description: Invalid code }
+  /api/v1/auth/passkeys/register/begin:
+    post:
+      tags: [mfa, passkeys]
+      summary: Begin WebAuthn passkey registration
+      responses:
+        '200': { description: PublicKeyCredentialCreationOptions with challenge_token }
+        '401': { description: Unauthorized }
+  /api/v1/auth/passkeys/register/finish:
+    post:
+      tags: [mfa, passkeys]
+      summary: Finish WebAuthn passkey registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasskeyRegistrationFinishRequest' }
+      responses:
+        '201': { description: Passkey stored }
+        '400': { description: Invalid challenge or client data }
+  /api/v1/auth/passkeys:
+    get:
+      tags: [mfa, passkeys]
+      summary: List passkeys of the current user
+      responses:
+        '200': { description: OK }
+        '401': { description: Unauthorized }
+  /api/v1/auth/passkeys/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    delete:
+      tags: [mfa, passkeys]
+      summary: Delete a passkey
+      responses:
+        '200': { description: Passkey deleted }
+        '401': { description: Unauthorized }
+  /api/v1/auth/passkeys/login/begin:
+    post:
+      tags: [passkeys]
+      summary: Begin WebAuthn passkey login
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: PublicKeyCredentialRequestOptions with challenge_token }
+        '404': { description: No passkeys for this account }
+  /api/v1/auth/passkeys/login/finish:
+    post:
+      tags: [passkeys]
+      summary: Finish WebAuthn passkey login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasskeyLoginFinishRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { description: Invalid assertion }
+  /api/v1/oauth/authorize:
+    get:
+      tags: [oauth]
+      summary: OAuth2 authorize (redirect flow)
+      security: []
+      parameters:
+        - { name: client_id, in: query, required: true, schema: { type: string } }
+        - { name: redirect_uri, in: query, required: true, schema: { type: string } }
+        - { name: response_type, in: query, schema: { type: string, default: code } }
+        - { name: scope, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code_challenge, in: query, required: true, schema: { type: string } }
+        - { name: code_challenge_method, in: query, schema: { type: string, enum: [S256] } }
+      responses:
+        '302': { description: Redirect to redirect_uri with code and state }
+        '400': { description: Invalid request }
+    post:
+      tags: [oauth]
+      summary: OAuth2 authorize (JSON flow)
+      description: Requires a Bearer token, or email/password for a direct grant.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthAuthorizeRequest' }
+      responses:
+        '200': { description: Authorization code issued }
+        '400': { description: Invalid request }
+        '401': { description: Unauthorized }
+  /api/v1/oauth/token:
+    post:
+      tags: [oauth]
+      summary: Exchange authorization code or refresh token
+      description: PKCE verifiers are required for public mobile clients using S256.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthTokenRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/TokenPair'
+                  - type: object
+                    properties:
+                      id_token: { type: string }
+        '400': { description: Invalid grant }
+  /api/v1/oauth/userinfo:
+    get:
+      tags: [oauth]
+      summary: OIDC userinfo
+      responses:
+        '200': { description: Standard OIDC claims (sub, email, name, role) }
+        '401': { description: Unauthorized }
+    post:
+      tags: [oauth]
+      summary: OIDC userinfo (POST)
+      responses:
+        '200': { description: Standard OIDC claims }
+        '401': { description: Unauthorized }
+  /api/v1/oauth/revoke:
+    post:
+      tags: [oauth]
+      summary: Revoke a refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                token_type_hint: { type: string, example: refresh_token }
+      responses:
+        '200': { description: Token revoked }
+        '401': { description: Unauthorized }
+  /api/v1/oauth/jwks:
+    get:
+      tags: [oauth]
+      summary: JWKS document
+      description: HS256 signing is used, so this returns an empty key set with an explanatory note.
+      security: []
+      responses:
+        '200': { description: OK }
+  /api/v1/.well-known/openid-configuration:
+    get:
+      tags: [oauth]
+      summary: OIDC discovery document
+      security: []
       responses:
         '200': { description: OK }
   /api/v1/cart:
@@ -858,6 +1274,25 @@ paths:
             schema: { $ref: '#/components/schemas/OrderStatusRequest' }
       responses:
         '200': { description: OK }
+  /api/v1/admin/orders/{id}/partner:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [admin]
+      summary: Assign an order to a partner
+      description: ABAC hook - the assigned partner then sees the order in /orders.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partner_id]
+              properties:
+                partner_id: { type: string, format: uuid }
+      responses:
+        '200': { description: Partner assigned }
+        '400': { description: Invalid partner }
   /api/v1/admin/destinations:
     post:
       tags: [admin]
@@ -1019,4 +1454,3 @@ paths:
       responses:
         '101': { description: Switching Protocols }
 `
-

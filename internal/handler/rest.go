@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"go-travel/internal/middleware"
 	"go-travel/internal/model"
 	"go-travel/internal/service"
 )
@@ -29,7 +30,9 @@ type paginationResponse struct {
 	TotalPages int `json:"total_pages"`
 }
 
-func (h *TravelHandler) RegisterRoutes(r *gin.Engine) {
+func (h *TravelHandler) RegisterRoutes(r *gin.Engine, mw *middleware.AuthMiddleware) {
+	admin := mw.RequireRoles("admin")
+	adminOrGuide := mw.RequireRoles("admin", "guide")
 	api := r.Group("/api/v1")
 	{
 		api.GET("/health", h.health)
@@ -38,19 +41,19 @@ func (h *TravelHandler) RegisterRoutes(r *gin.Engine) {
 		api.GET("/destinations/top", h.topDestinations)
 		api.GET("/destinations/countries", h.listCountries)
 		api.GET("/destinations/:id", h.getDestination)
-		api.POST("/destinations", h.createDestination)
-		api.PUT("/destinations/:id", h.updateDestination)
-		api.DELETE("/destinations/:id", h.deleteDestination)
+		api.POST("/destinations", admin, h.createDestination)
+		api.PUT("/destinations/:id", admin, h.updateDestination)
+		api.DELETE("/destinations/:id", admin, h.deleteDestination)
 		api.GET("/tours", h.listTours)
 		api.GET("/tours/search", h.searchTours)
 		api.GET("/tours/featured", h.featuredTours)
 		api.GET("/tours/:id", h.getTour)
-		api.POST("/tours", h.createTour)
-		api.PUT("/tours/:id", h.updateTour)
-		api.DELETE("/tours/:id", h.deleteTour)
+		api.POST("/tours", adminOrGuide, h.createTour)
+		api.PUT("/tours/:id", adminOrGuide, h.updateTour)
+		api.DELETE("/tours/:id", adminOrGuide, h.deleteTour)
 		api.GET("/events", h.listEvents)
-		api.POST("/sync", h.sync)
-		api.GET("/sync/jobs", h.listSyncJobs)
+		api.POST("/sync", admin, h.sync)
+		api.GET("/sync/jobs", admin, h.listSyncJobs)
 	}
 }
 
@@ -137,7 +140,20 @@ func (h *TravelHandler) listTours(c *gin.Context) {
 		available = &b
 	}
 
-	tours, total, err := h.svc.ListTours(c.Request.Context(), destID, available, &p)
+	var tours []model.Tour
+	var total int
+	var err error
+	if c.GetString("user_role") == "guide" {
+		ownerID, parseErr := uuid.Parse(c.GetString("user_id"))
+		if parseErr != nil {
+			c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "invalid guide identity"})
+			return
+		}
+		// ABAC: a guide only sees tours they own.
+		tours, total, err = h.svc.ListToursByOwner(c.Request.Context(), ownerID, destID, available, &p)
+	} else {
+		tours, total, err = h.svc.ListTours(c.Request.Context(), destID, available, &p)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
 		return
@@ -174,6 +190,14 @@ func (h *TravelHandler) createTour(c *gin.Context) {
 	if err := h.val.Struct(&t); err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
+	}
+	if c.GetString("user_role") == "guide" {
+		ownerID, parseErr := uuid.Parse(c.GetString("user_id"))
+		if parseErr != nil {
+			c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "invalid guide identity"})
+			return
+		}
+		t.OwnerID = ownerID
 	}
 	if err := h.svc.CreateTour(c.Request.Context(), &t); err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})

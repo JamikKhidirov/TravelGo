@@ -51,6 +51,7 @@ services:
       REDIS_ADDR: redis:6379
       KAFKA_BROKERS: localhost:9092
       FCM_SERVER_KEY: ${FCM_SERVER_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
     volumes:
       - ./configs/config.yaml:/configs/config.yaml
     restart: unless-stopped

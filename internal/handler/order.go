@@ -40,7 +40,14 @@ func (h *OrderHandler) list(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	orders, total, err := h.orderSvc.ListOrders(c.Request.Context(), userID, &p)
+	var orders []model.Order
+	var total int
+	if c.GetString("user_role") == "partner" {
+		// ABAC: a partner only sees orders explicitly assigned to them.
+		orders, total, err = h.orderSvc.ListPartnerOrders(c.Request.Context(), userID, &p)
+	} else {
+		orders, total, err = h.orderSvc.ListOrders(c.Request.Context(), userID, &p)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
 		return
@@ -63,13 +70,39 @@ func (h *OrderHandler) get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
 		return
 	}
+	uid, _ := uuid.Parse(c.GetString("user_id"))
+	if !canAccessOrder(c, o, uid) {
+		c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "access denied"})
+		return
+	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: o})
+}
+
+func canAccessOrder(c *gin.Context, o *model.Order, uid uuid.UUID) bool {
+	switch c.GetString("user_role") {
+	case "admin":
+		return true
+	case "partner":
+		return o.PartnerID == uid
+	default:
+		return o.UserID == uid
+	}
 }
 
 func (h *OrderHandler) cancel(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid id"})
+		return
+	}
+	o, err := h.orderSvc.GetOrder(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	uid, _ := uuid.Parse(c.GetString("user_id"))
+	if c.GetString("user_role") != "admin" && o.UserID != uid {
+		c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "access denied"})
 		return
 	}
 	if err := h.orderSvc.CancelOrder(c.Request.Context(), id); err != nil {
@@ -90,6 +123,21 @@ func (h *OrderHandler) updateStatus(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	o, err := h.orderSvc.GetOrder(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	uid, _ := uuid.Parse(c.GetString("user_id"))
+	role := c.GetString("user_role")
+	if role == "partner" && o.PartnerID != uid {
+		c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "order is assigned to another partner"})
+		return
+	}
+	if role == "user" && o.UserID != uid {
+		c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "access denied"})
 		return
 	}
 	if err := h.orderSvc.UpdateStatus(c.Request.Context(), id, req.Status); err != nil {

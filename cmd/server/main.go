@@ -21,6 +21,7 @@ import (
 	"go-travel/internal/cache"
 	"go-travel/internal/config"
 	"go-travel/internal/handler"
+	"go-travel/internal/middleware"
 	"go-travel/internal/repository"
 	"go-travel/internal/service"
 )
@@ -83,7 +84,16 @@ func main() {
 		slog.Error("failed to open db", "err", err)
 		os.Exit(1)
 	}
+	db.SetMaxOpenConns(cfg.DB.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.DB.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetimeDuration())
+	db.SetConnMaxIdleTime(2 * time.Minute)
 	defer db.Close()
+	slog.Info("db pool configured",
+		"max_open_conns", cfg.DB.MaxOpenConns,
+		"max_idle_conns", cfg.DB.MaxIdleConns,
+		"conn_max_lifetime", cfg.ConnMaxLifetimeDuration().String(),
+	)
 
 	if err := db.Ping(); err != nil {
 		slog.Error("failed to ping db", "err", err)
@@ -112,8 +122,19 @@ func main() {
 	flightSrc := transport.NewFlightSource()
 	railSrc := transport.NewRailSource()
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		if cfg.App.Env == "production" {
+			slog.Error("JWT_SECRET must be set in production")
+			os.Exit(1)
+		}
+		jwtSecret = "travel-secret"
+		slog.Warn("JWT_SECRET is not set, using insecure development default")
+	}
+	authMW := middleware.NewAuthMiddleware([]byte(jwtSecret), repo)
+
 	travelSvc := service.NewTravelService(repo)
-	authSvc := service.NewAuthService(repo, "travel-secret")
+	authSvc := service.NewAuthService(repo, jwtSecret)
 	cartSvc := service.NewCartService(repo)
 	orderSvc := service.NewOrderService(repo)
 	paymentSvc := service.NewPaymentService(repo)
@@ -138,7 +159,7 @@ func main() {
 	adminH := handler.NewAdminHandler(repo, syncSvc, travelSvc, voucherSvc, ticketSvc)
 
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(gin.Logger(), gin.Recovery(), authMW.Optional())
 
 	// Swagger UI — отдаём YAML спецификацию напрямую
 	r.GET("/swagger/index.html", func(c *gin.Context) {
@@ -152,22 +173,23 @@ func main() {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(handler.AdminPanelHTML()))
 	})
 
-	h.RegisterRoutes(r)
+	h.RegisterRoutes(r, authMW)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"success": true, "data": gin.H{"status": "ok"}})
 	})
 
 	api := r.Group("/api/v1")
-	authH.RegisterRoutes(api)
+	api.Use(authMW.Optional())
+	authH.RegisterRoutes(api, authMW)
 	cartH.RegisterRoutes(api)
 	orderH.RegisterRoutes(api)
 	paymentH.RegisterRoutes(api)
 	reviewH.RegisterRoutes(api)
 	voucherH.RegisterRoutes(api)
 	ticketH.RegisterRoutes(api)
-	pushH.RegisterRoutes(api)
-	adminH.RegisterRoutes(api)
+	pushH.RegisterRoutes(api, authMW)
+	adminH.RegisterRoutes(api, authMW.RequireRoles("admin"))
 
 	wsHub := handler.NewWSHub()
 	go wsHub.Run()

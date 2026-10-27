@@ -2,7 +2,7 @@
   "info": {
     "name": "GoTravel API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Complete GoTravel API collection: health, destinations, tours, events, sync, auth, cart, orders, payments, reviews, vouchers, admin, WebSocket."
+    "description": "Complete GoTravel API collection: health, destinations, tours, events, sync, auth (JWT + refresh, MFA/TOTP, WebAuthn passkeys, sessions/devices), OAuth2/OIDC with PKCE, cart, orders, payments, reviews, vouchers, tickets, push, RBAC/ABAC and admin."
   },
   "variable": [
     {
@@ -51,6 +51,70 @@
     },
     {
       "key": "deviceToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "mfaToken",
+      "value": ""
+    },
+    {
+      "key": "mfaSecret",
+      "value": ""
+    },
+    {
+      "key": "oauthCode",
+      "value": ""
+    },
+    {
+      "key": "codeVerifier",
+      "value": ""
+    },
+    {
+      "key": "codeChallenge",
+      "value": ""
+    },
+    {
+      "key": "passkeyId",
+      "value": ""
+    },
+    {
+      "key": "passkeyChallenge",
+      "value": ""
+    },
+    {
+      "key": "passkeyChallengeToken",
+      "value": ""
+    },
+    {
+      "key": "partnerId",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": "user@example.com"
+    },
+    {
+      "key": "deviceName",
+      "value": "Postman Desktop"
+    },
+    {
+      "key": "devicePlatform",
+      "value": "web"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "passkeyClientData",
       "value": ""
     }
   ],
@@ -270,10 +334,18 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('201', () => pm.response.to.have.status(201));",
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.collectionVariables.set('token', d.token);",
-                  "if (d && d.user && d.user.id) pm.collectionVariables.set('userId', d.user.id);"
+                  "pm.test('status ok', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data || {};",
+                  "const t = data.tokens || {};",
+                  "const access = t.access_token || data.token;",
+                  "if (access) pm.collectionVariables.set('token', access);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refreshToken', t.refresh_token);",
+                  "if (t.session_id) pm.collectionVariables.set('sessionId', t.session_id);",
+                  "if (data.user && data.user.id) pm.collectionVariables.set('userId', data.user.id);",
+                  "if (data.mfa_required) {",
+                  "  pm.collectionVariables.set('mfaToken', data.mfa_token || '');",
+                  "  pm.test('MFA required - complete Login (MFA)', () => pm.expect(true).to.eql(true));",
+                  "}"
                 ]
               }
             }
@@ -285,6 +357,14 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Device-Name",
+                "value": "{{deviceName}}"
+              },
+              {
+                "key": "X-Device-Platform",
+                "value": "{{devicePlatform}}"
               }
             ],
             "body": {
@@ -300,10 +380,18 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.collectionVariables.set('token', d.token);",
-                  "if (d && d.user && d.user.id) pm.collectionVariables.set('userId', d.user.id);"
+                  "pm.test('status ok', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data || {};",
+                  "const t = data.tokens || {};",
+                  "const access = t.access_token || data.token;",
+                  "if (access) pm.collectionVariables.set('token', access);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refreshToken', t.refresh_token);",
+                  "if (t.session_id) pm.collectionVariables.set('sessionId', t.session_id);",
+                  "if (data.user && data.user.id) pm.collectionVariables.set('userId', data.user.id);",
+                  "if (data.mfa_required) {",
+                  "  pm.collectionVariables.set('mfaToken', data.mfa_token || '');",
+                  "  pm.test('MFA required - complete Login (MFA)', () => pm.expect(true).to.eql(true));",
+                  "}"
                 ]
               }
             }
@@ -315,6 +403,14 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Device-Name",
+                "value": "{{deviceName}}"
+              },
+              {
+                "key": "X-Device-Platform",
+                "value": "{{devicePlatform}}"
               }
             ],
             "body": {
@@ -332,10 +428,6 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
               }
             ]
           }
@@ -349,10 +441,6 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
               }
             ]
           }
@@ -370,10 +458,6 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
               }
             ],
             "body": {
@@ -395,10 +479,6 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
               }
             ],
             "body": {
@@ -414,14 +494,771 @@
             "url": "{{baseUrl}}/api/v1/auth/refresh",
             "header": [
               {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status ok', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data || {};",
+                  "const t = data.tokens || {};",
+                  "const access = t.access_token || data.token;",
+                  "if (access) pm.collectionVariables.set('token', access);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refreshToken', t.refresh_token);",
+                  "if (t.session_id) pm.collectionVariables.set('sessionId', t.session_id);",
+                  "if (data.user && data.user.id) pm.collectionVariables.set('userId', data.user.id);",
+                  "if (data.mfa_required) {",
+                  "  pm.collectionVariables.set('mfaToken', data.mfa_token || '');",
+                  "  pm.test('MFA required - complete Login (MFA)', () => pm.expect(true).to.eql(true));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (MFA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login/mfa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mfa_token\": \"{{mfaToken}}\",\n  \"code\": \"123456\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status ok', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data || {};",
+                  "const t = data.tokens || {};",
+                  "const access = t.access_token || data.token;",
+                  "if (access) pm.collectionVariables.set('token', access);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refreshToken', t.refresh_token);",
+                  "if (t.session_id) pm.collectionVariables.set('sessionId', t.session_id);",
+                  "if (data.user && data.user.id) pm.collectionVariables.set('userId', data.user.id);",
+                  "if (data.mfa_required) {",
+                  "  pm.collectionVariables.set('mfaToken', data.mfa_token || '');",
+                  "  pm.test('MFA required - complete Login (MFA)', () => pm.expect(true).to.eql(true));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout All Devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout-all"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sessions / Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/sessions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data || {};",
+                  "const s = data.summary || {};",
+                  "if (s.current_session_id) pm.collectionVariables.set('sessionId', s.current_session_id);",
+                  "console.log('active sessions:', s.active_sessions, 'platforms:', JSON.stringify(s.platforms), 'ips:', JSON.stringify(s.unique_ips));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/sessions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const s = (pm.response.json().data || {}).summary || {};",
+                  "pm.test('has summary', () => pm.expect(s).to.have.property('active_sessions'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/sessions/{{sessionId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MFA Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/mfa/status"
+          }
+        },
+        {
+          "name": "MFA Setup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/mfa/setup"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.secret) pm.collectionVariables.set('mfaSecret', d.secret);",
+                  "console.log('otpauth:', d.otpauth_url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MFA Enable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               },
               {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
-            ]
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/mfa/enable",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MFA Disable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/mfa/disable",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Passkey Register Begin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys/register/begin"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.challenge) pm.collectionVariables.set('passkeyChallenge', d.challenge);",
+                  "if (d.challenge_token) pm.collectionVariables.set('passkeyChallengeToken', d.challenge_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Passkey Register Finish",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys/register/finish",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential_id\": \"demo-credential-id\",\n  \"client_data_json\": \"{{passkeyClientData}}\",\n  \"attestation_object\": \"demo-attestation\",\n  \"transports\": \"internal\",\n  \"challenge_token\": \"{{passkeyChallengeToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Build a demo clientDataJSON bound to the real challenge (server-side signature verification is not performed).",
+                  "const ch = pm.collectionVariables.get('passkeyChallenge') || '';",
+                  "const cdj = JSON.stringify({ type: 'webauthn.create', challenge: ch, origin: pm.variables.get('baseUrl') });",
+                  "pm.collectionVariables.set('passkeyClientData', btoa(cdj).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, ''));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.id) pm.collectionVariables.set('passkeyId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Passkeys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys"
+          }
+        },
+        {
+          "name": "Delete Passkey",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys/{{passkeyId}}"
+          }
+        },
+        {
+          "name": "Passkey Login Begin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys/login/begin",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.challenge) pm.collectionVariables.set('passkeyChallenge', d.challenge);",
+                  "if (d.challenge_token) pm.collectionVariables.set('passkeyChallengeToken', d.challenge_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Passkey Login Finish",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/passkeys/login/finish",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential_id\": \"demo-credential-id\",\n  \"client_data_json\": \"{{passkeyClientData}}\",\n  \"challenge_token\": \"{{passkeyChallengeToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ch = pm.collectionVariables.get('passkeyChallenge') || '';",
+                  "const cdj = JSON.stringify({ type: 'webauthn.get', challenge: ch, origin: pm.variables.get('baseUrl') });",
+                  "pm.collectionVariables.set('passkeyClientData', btoa(cdj).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, ''));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status ok', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data || {};",
+                  "const t = data.tokens || {};",
+                  "const access = t.access_token || data.token;",
+                  "if (access) pm.collectionVariables.set('token', access);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refreshToken', t.refresh_token);",
+                  "if (t.session_id) pm.collectionVariables.set('sessionId', t.session_id);",
+                  "if (data.user && data.user.id) pm.collectionVariables.set('userId', data.user.id);",
+                  "if (data.mfa_required) {",
+                  "  pm.collectionVariables.set('mfaToken', data.mfa_token || '');",
+                  "  pm.test('MFA required - complete Login (MFA)', () => pm.expect(true).to.eql(true));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "OAuth2 / OIDC",
+      "description": "Authorization Code flow with PKCE (S256) for mobile clients, plus OIDC discovery and userinfo.",
+      "item": [
+        {
+          "name": "Authorize (PKCE, JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/authorize",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"gotravel-mobile\",\n  \"redirect_uri\": \"gotravel://callback\",\n  \"response_type\": \"code\",\n  \"scope\": \"openid profile email offline_access\",\n  \"state\": \"demo-state\",\n  \"nonce\": \"demo-nonce\",\n  \"code_challenge\": \"{{codeChallenge}}\",\n  \"code_challenge_method\": \"S256\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate an RFC 7636 code verifier and its S256 challenge.",
+                  "const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';",
+                  "let v = '';",
+                  "for (let i = 0; i < 64; i++) v += chars[Math.floor(Math.random() * chars.length)];",
+                  "pm.collectionVariables.set('codeVerifier', v);",
+                  "const c = CryptoJS.SHA256(v).toString(CryptoJS.enc.Base64).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "pm.collectionVariables.set('codeChallenge', c);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.code) pm.collectionVariables.set('oauthCode', d.code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize (Redirect)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/authorize?client_id=gotravel-web&redirect_uri={{baseUrl}}/callback&response_type=code&scope=openid%20profile%20email&state=demo&code_challenge={{codeChallenge}}&code_challenge_method=S256",
+            "description": "Browser redirect flow. Requires a valid access token; returns 302 to redirect_uri with code and state."
+          }
+        },
+        {
+          "name": "Token (authorization_code + PKCE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"{{oauthCode}}\",\n  \"redirect_uri\": \"gotravel://callback\",\n  \"client_id\": \"gotravel-mobile\",\n  \"code_verifier\": \"{{codeVerifier}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "if (d.access_token) pm.collectionVariables.set('token', d.access_token);",
+                  "if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+                  "if (d.session_id) pm.collectionVariables.set('sessionId', d.session_id);",
+                  "pm.test('has id_token', () => pm.expect(d.id_token).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token (refresh_token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"refresh_token\",\n  \"refresh_token\": \"{{refreshToken}}\",\n  \"client_id\": \"gotravel-mobile\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "if (d.access_token) pm.collectionVariables.set('token', d.access_token);",
+                  "if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Userinfo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/userinfo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('has sub', () => pm.expect(d.sub).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/oauth/revoke",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{refreshToken}}\",\n  \"token_type_hint\": \"refresh_token\"\n}"
+            }
+          }
+        },
+        {
+          "name": "JWKS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/oauth/jwks"
+          }
+        },
+        {
+          "name": "OIDC Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/.well-known/openid-configuration"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RBAC / ABAC",
+      "description": "Role and ownership checks: guides only see their own tours, partners only their assigned orders.",
+      "item": [
+        {
+          "name": "Guide - List Own Tours",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/tours?page=1&page_size=20",
+            "description": "Sign in as a guide; the response is automatically scoped to tours owned by that guide."
+          }
+        },
+        {
+          "name": "Guide - Create Own Tour",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/tours",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_id\": \"{{destinationId}}\",\n  \"title\": \"Guide owned tour\",\n  \"description\": \"Created by the authenticated guide\",\n  \"price\": 499,\n  \"currency\": \"USD\",\n  \"duration_days\": 5,\n  \"available\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data || {};",
+                  "if (d.id) pm.collectionVariables.set('tourId', d.id);",
+                  "pm.test('owner set', () => pm.expect(d.owner_id).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partner - List Assigned Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders?page=1&page_size=20",
+            "description": "Sign in as a partner; only orders assigned through /admin/orders/{id}/partner are returned."
+          }
+        },
+        {
+          "name": "Partner - Update Assigned Order Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin - Assign Order To Partner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/partner",
+            "description": "Requires an admin account or dev headers X-User-Id/X-User-Role: admin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\"\n}"
+            }
           }
         }
       ]

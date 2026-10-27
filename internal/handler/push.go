@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go-travel/internal/middleware"
 	"go-travel/internal/model"
 	"go-travel/internal/service"
 )
@@ -17,14 +18,14 @@ func NewPushHandler(pushSvc *service.PushService) *PushHandler {
 	return &PushHandler{pushSvc: pushSvc}
 }
 
-func (h *PushHandler) RegisterRoutes(r *gin.RouterGroup) {
-	devices := r.Group("/devices")
+func (h *PushHandler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.AuthMiddleware) {
+	devices := r.Group("/devices", mw.Required())
 	{
 		devices.POST("/register", h.registerDevice)
 		devices.GET("", h.listDevices)
 		devices.DELETE("/:token", h.unregisterDevice)
 	}
-	admin := r.Group("/admin")
+	admin := r.Group("/admin", mw.RequireRoles("admin"))
 	{
 		admin.POST("/push", h.sendPush)
 		admin.GET("/push", h.pushHistory)

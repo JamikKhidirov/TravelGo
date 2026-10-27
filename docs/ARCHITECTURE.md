@@ -93,6 +93,53 @@ type TicketSource interface {
 - При наличии `FCM_SERVER_KEY` используется Firebase Cloud Messaging (Android и iOS).
 - Без ключа включается `log`-провайдер для локальной разработки.
 
+## Аутентификация и безопасность
+
+```mermaid
+flowchart LR
+    C["Client"] -->|"POST /auth/login"| A["AuthService"]
+    A -->|"access JWT + refresh"| C
+    C -->|"Authorization: Bearer"| M["AuthMiddleware"]
+    M -->|"проверка подписи и сессии"| R[("auth_sessions")]
+    M --> H["Handlers"]
+    H -->|"RBAC/ABAC"| S["Service"]
+    S --> DB[("PostgreSQL")]
+```
+
+- **Access token** — JWT HS256, содержит `sub`, `sid`, `role`, `exp`; секрет задаётся
+  `JWT_SECRET` (в Docker — переменная compose), по умолчанию dev-значение.
+- **Refresh token** — непрозрачная строка, в БД хранится только SHA-256 хеш. При каждом
+  обновлении токен ротируется, старая запись инвалидируется.
+- **Сессии** (`auth_sessions`) хранят device name, platform, IP, user-agent, время
+  логина, `last_seen_at`, срок жизни и `revoked_at`. Middleware проверяет, что сессия
+  не отозвана; `last_seen_at` обновляется с троттлингом раз в минуту.
+- **MFA** (`user_mfa`) — TOTP SHA1/6 цифр/30 секунд, совместим с Google Authenticator.
+  Секрет выдаётся через `/auth/mfa/setup`, включается подтверждением кода.
+- **Passkeys** (`passkey_credentials`) — WebAuthn challenge + `clientDataJSON` проверяются
+  на сервере; подпись attestation/assertion проверяется платформой (документированное
+  ограничение).
+- **OAuth2/OIDC** (`oauth_codes`) — authorization code живёт 5 минут, одноразовый,
+  PKCE только `S256`. `id_token` — HS256, `/oauth/jwks` возвращает пустой набор ключей.
+- **RBAC** — роли `user`, `guide`, `partner`, `admin`; middleware отклоняет запросы без
+  нужной роли (403).
+- **ABAC** — гид ограничен `tours.owner_id`, партнёр — `orders.partner_id`; проверки
+  выполняются и в списках, и при чтении/изменении конкретной записи.
+
+## Пул подключений PostgreSQL
+
+`schema`-миграции выполняются при старте, после чего пул настраивается:
+
+| Параметр | По умолчанию | Env |
+|---|---|---|
+| `max_open_conns` | 25 | `DB_MAX_OPEN_CONNS` |
+| `max_idle_conns` | 10 | `DB_MAX_IDLE_CONNS` |
+| `conn_max_lifetime` | 5m | `DB_CONN_MAX_LIFETIME` |
+| `conn_max_idle_time` | 2m | — |
+
+Значения из `configs/config.yaml` переопределяются переменными окружения. При старте
+в лог пишется `db pool configured` с фактическими параметрами — это удобно проверять
+в `docker compose logs app`.
+
 ## Хранение геолокации
 
 WebSocket-хаб хранит подключения и позиции в памяти процесса. Для нескольких инстансов приложения нужен общий pub/sub (Redis, NATS или Kafka).

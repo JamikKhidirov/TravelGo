@@ -71,6 +71,11 @@ flowchart LR
 - **Корзина и заказы:** добавление туров, checkout, статусы, отмена.
 - **Оплаты:** создание и подтверждение платежа.
 - **Отзывы и ваучеры:** рейтинг, комментарии, CRUD ваучеров.
+- **Аутентификация:** JWT HS256 access token + ротируемые refresh-токены, сессии в БД.
+- **MFA:** TOTP для Google Authenticator и WebAuthn/passkeys.
+- **Устройства и сессии:** список устройств, IP, время входа, отзыв сессии и «выйти на всех устройствах».
+- **OAuth2/OIDC:** authorization code + PKCE (S256) для мобильных клиентов, userinfo и discovery.
+- **RBAC/ABAC:** гид видит только свои туры, партнёр — только назначенные заказы.
 - **WebSocket:** геолокация, комнаты, presence, live-обновления.
 - **Push:** регистрация iOS/Android устройств и админская рассылка через FCM.
 - **Админка:** встроенная панель `/admin` со статистикой и отправкой push.
@@ -118,6 +123,22 @@ go run ./cmd/server
 
 Нужны PostgreSQL и Redis, параметры — в `configs/config.yaml` или через переменные окружения.
 
+Пул подключений PostgreSQL настраивается в `configs/config.yaml`:
+
+```yaml
+db:
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: 5m
+```
+
+или переменными `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME`.
+Время жизни idle-соединения — 2 минуты. При старте сервер пишет в лог
+`db pool configured` с фактическими значениями.
+
+Секрет для JWT задаётся переменной `JWT_SECRET`. В production сервер не стартует без
+неё; в dev/docker используется значение по умолчанию (только для разработки).
+
 ## Документация
 
 | Документ | Описание |
@@ -138,9 +159,15 @@ go run ./cmd/server
 Авторизация:
 
 ```http
-Authorization: Bearer <token>
-X-User-Id: <uuid>
+Authorization: Bearer <access_token>
 ```
+
+JWT access token (HS256) дополняется одноразовым refresh-токеном; каждая сессия
+хранится в БД и привязана к устройству, IP и времени входа. Для локальной разработки
+остаётся fallback `X-User-Id` / `X-User-Role`.
+
+Роли: `user`, `guide`, `partner`, `admin`. Гид видит и редактирует только свои туры,
+партнёр — только назначенные ему заказы, админ-маршруты `/admin/*` требуют роль `admin`.
 
 Основные группы:
 
@@ -152,12 +179,13 @@ X-User-Id: <uuid>
 | Городские пакеты | `/cities/{city}/packages` |
 | Синхронизация | `/sync` |
 | Auth | `/auth` |
+| OAuth2/OIDC | `/oauth`, `/.well-known/openid-configuration` |
 | Корзина | `/cart` |
 | Заказы | `/orders` |
 | Оплаты | `/payments` |
 | Отзывы | `/reviews` |
 | Ваучеры | `/vouchers` |
-| Устройства | `/devices` |
+| Устройства и сессии | `/auth/sessions`, `/auth/devices` |
 | Админ | `/admin` |
 
 Пример регистрации и логина:
@@ -165,12 +193,53 @@ X-User-Id: <uuid>
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
+  -H "X-Device-Name: MacBook Pro" \
+  -H "X-Device-Platform: web" \
   -d '{"email":"user@example.com","password":"password123","first_name":"John","last_name":"Doe"}'
 
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
+  -H "X-Device-Name: iPhone 15" \
+  -H "X-Device-Platform: ios" \
   -d '{"email":"user@example.com","password":"password123"}'
 ```
+
+Список устройств и сводка по аккаунту:
+
+```bash
+curl http://localhost:8080/api/v1/auth/sessions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Выход на всех устройствах:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/logout-all \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+MFA (TOTP, Google Authenticator):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/mfa/setup -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:8080/api/v1/auth/mfa/enable \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"code":"123456"}'
+```
+
+OAuth2/OIDC с PKCE для мобильных клиентов:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/oauth/authorize \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"client_id":"gotravel-mobile","redirect_uri":"gotravel://callback","scope":"openid profile email","code_challenge":"<S256>","code_challenge_method":"S256"}'
+
+curl -X POST http://localhost:8080/api/v1/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{"grant_type":"authorization_code","code":"<code>","redirect_uri":"gotravel://callback","client_id":"gotravel-mobile","code_verifier":"<verifier>"}'
+```
+
+Подробные примеры — в [docs/REST.md](docs/REST.md).
 
 Пример билетов:
 
@@ -263,8 +332,8 @@ docker compose up -d --build
 Релиз создаётся автоматически при пуше тега `v*`:
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
 GitHub Actions соберёт и приложит к релизу:
@@ -292,7 +361,8 @@ internal/handler/           REST, WebSocket, push, admin
 internal/service/           бизнес-логика и синхронизация
 internal/repository/        PostgreSQL, upsert, пагинация
 internal/model/             доменные модели
-internal/middleware/        auth/admin middleware
+internal/security/          JWT, PKCE, TOTP, WebAuthn helpers
+internal/middleware/        auth, RBAC/ABAC middleware
 configs/                    конфигурация
 api/swagger/                OpenAPI YAML
 docs/                       REST, WebSocket, архитектура, VPS

@@ -36,6 +36,7 @@ type Tour struct {
 	ImageURL      string    `json:"image_url" db:"image_url"`
 	Source        string    `json:"source" db:"source"`
 	ExternalID    string    `json:"external_id" db:"external_id"`
+	OwnerID       uuid.UUID `json:"owner_id" db:"owner_id"`
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }

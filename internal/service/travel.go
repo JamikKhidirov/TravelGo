@@ -24,6 +24,12 @@ func (s *TravelService) CreateDestination(ctx context.Context, d *model.Destinat
 		return err
 	}
 	d.ID = uuid.New()
+	if d.Source == "" {
+		d.Source = "manual"
+	}
+	if d.ExternalID == "" {
+		d.ExternalID = d.ID.String()
+	}
 	now := time.Now()
 	d.CreatedAt = now
 	d.UpdatedAt = now
@@ -53,6 +59,12 @@ func (s *TravelService) CreateTour(ctx context.Context, t *model.Tour) error {
 		return err
 	}
 	t.ID = uuid.New()
+	if t.Source == "" {
+		t.Source = "manual"
+	}
+	if t.ExternalID == "" {
+		t.ExternalID = t.ID.String()
+	}
 	now := time.Now()
 	t.CreatedAt = now
 	t.UpdatedAt = now
@@ -71,6 +83,10 @@ func (s *TravelService) CreateTour(ctx context.Context, t *model.Tour) error {
 
 func (s *TravelService) ListTours(ctx context.Context, destID *uuid.UUID, available *bool, p *model.Pagination) ([]model.Tour, int, error) {
 	return s.repo.GetTours(ctx, destID, available, p)
+}
+
+func (s *TravelService) ListToursByOwner(ctx context.Context, ownerID uuid.UUID, destID *uuid.UUID, available *bool, p *model.Pagination) ([]model.Tour, int, error) {
+	return s.repo.GetToursByOwner(ctx, ownerID, destID, available, p)
 }
 
 func (s *TravelService) GetTour(ctx context.Context, id uuid.UUID) (*model.Tour, error) {

@@ -7,15 +7,16 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	Email     string    `json:"email" db:"email" validate:"required,email"`
-	Password  string    `json:"-" db:"password_hash" validate:"required,min=6"`
-	FirstName string    `json:"first_name" db:"first_name" validate:"required"`
-	LastName  string    `json:"last_name" db:"last_name" validate:"required"`
-	Phone     string    `json:"phone" db:"phone"`
-	Role      string    `json:"role" db:"role" validate:"required,oneof=user admin"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID         uuid.UUID `json:"id" db:"id"`
+	Email      string    `json:"email" db:"email" validate:"required,email"`
+	Password   string    `json:"-" db:"password_hash" validate:"required,min=6"`
+	FirstName  string    `json:"first_name" db:"first_name" validate:"required"`
+	LastName   string    `json:"last_name" db:"last_name" validate:"required"`
+	Phone      string    `json:"phone" db:"phone"`
+	MFAEnabled bool      `json:"mfa_enabled" db:"mfa_enabled"`
+	Role       string    `json:"role" db:"role" validate:"required,oneof=user admin guide partner"`
+	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type LoginRequest struct {
@@ -54,6 +55,7 @@ type Order struct {
 	Nights         int       `json:"nights" db:"nights" validate:"min=1"`
 	Adults         int       `json:"adults" db:"adults" validate:"min=1"`
 	Children       int       `json:"children" db:"children"`
+	PartnerID      uuid.UUID `json:"partner_id" db:"partner_id"`
 	CreatedAt      time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
 }

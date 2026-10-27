@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,74 +10,6 @@ import (
 	"go-travel/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type AuthService struct {
-	repo      *repository.TravelRepository
-	jwtSecret []byte
-}
-
-func NewAuthService(repo *repository.TravelRepository, jwtSecret string) *AuthService {
-	return &AuthService{repo: repo, jwtSecret: []byte(jwtSecret)}
-}
-
-func (s *AuthService) Register(ctx context.Context, req *model.LoginRequest, firstName, lastName, phone, role string) (*model.User, string, error) {
-	exists, err := s.repo.GetUserByEmail(ctx, req.Email)
-	if err == nil && exists != nil {
-		return nil, "", errors.New("user already exists")
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, "", fmt.Errorf("hash password: %w", err)
-	}
-
-	u := &model.User{
-		ID:        uuid.New(),
-		Email:     req.Email,
-		Password:  string(hash),
-		FirstName: firstName,
-		LastName:  lastName,
-		Phone:     phone,
-		Role:      role,
-	}
-	if err := s.repo.CreateUser(ctx, u); err != nil {
-		return nil, "", err
-	}
-
-	token, err := s.generateToken(u.ID, u.Role)
-	if err != nil {
-		return nil, "", err
-	}
-	return u, token, nil
-}
-
-func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest) (*model.User, string, error) {
-	u, err := s.repo.GetUserByEmail(ctx, req.Email)
-	if err != nil {
-		return nil, "", errors.New("invalid credentials")
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		return nil, "", errors.New("invalid credentials")
-	}
-	token, err := s.generateToken(u.ID, u.Role)
-	if err != nil {
-		return nil, "", err
-	}
-	return u, token, nil
-}
-
-func (s *AuthService) generateToken(userID uuid.UUID, role string) (string, error) {
-	// simplified JWT-like token using standard library would be better, but using claims map manually
-	// For this service we return a signed string. Using jwt-go would require claims struct.
-	// We'll produce a placeholder signed token for compatibility.
-	token := fmt.Sprintf("travel-token-%s-%s-%d", userID, role, time.Now().Unix())
-	return token, nil
-}
-
-func (s *AuthService) ValidateToken(token string) (uuid.UUID, string, error) {
-	// simplified validation
-	return uuid.Nil, "", errors.New("token validation not implemented in mock mode")
-}
 
 type CartService struct {
 	repo *repository.TravelRepository
@@ -185,6 +116,10 @@ func (s *OrderService) ListOrders(ctx context.Context, userID uuid.UUID, p *mode
 	return s.repo.GetOrdersByUser(ctx, userID, p)
 }
 
+func (s *OrderService) ListPartnerOrders(ctx context.Context, partnerID uuid.UUID, p *model.Pagination) ([]model.Order, int, error) {
+	return s.repo.GetOrdersByPartner(ctx, partnerID, p)
+}
+
 func (s *OrderService) CancelOrder(ctx context.Context, id uuid.UUID) error {
 	return s.repo.UpdateOrderStatus(ctx, id, "cancelled")
 }
@@ -279,10 +214,6 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldP
 		return err
 	}
 	return s.repo.UpdateUserPassword(ctx, userID, string(hash))
-}
-
-func (s *AuthService) RefreshToken(ctx context.Context, userID uuid.UUID, role string) (string, error) {
-	return s.generateToken(userID, role)
 }
 
 func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) (*model.User, error) {

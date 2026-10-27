@@ -22,14 +22,15 @@ func NewAdminHandler(repo *repository.TravelRepository, syncSvc *service.SyncSer
 	return &AdminHandler{repo: repo, syncSvc: syncSvc, travelSvc: travelSvc, voucherSvc: voucherSvc, ticketSvc: ticketSvc}
 }
 
-func (h *AdminHandler) RegisterRoutes(r *gin.RouterGroup) {
-	admin := r.Group("/admin")
+func (h *AdminHandler) RegisterRoutes(r *gin.RouterGroup, guards ...gin.HandlerFunc) {
+	admin := r.Group("/admin", guards...)
 	{
 		admin.GET("/stats", h.stats)
 		admin.POST("/sync", h.sync)
 		admin.GET("/users", h.listUsers)
 		admin.GET("/orders", h.listOrders)
 		admin.POST("/orders/:id/status", h.updateOrderStatus)
+		admin.POST("/orders/:id/partner", h.assignOrderPartner)
 		admin.POST("/destinations", h.createDestination)
 		admin.POST("/tours", h.createTour)
 		admin.POST("/vouchers", h.createVoucher)
@@ -154,6 +155,36 @@ func (h *AdminHandler) createVoucher(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, model.Response{Success: true, Data: v})
+}
+
+func (h *AdminHandler) assignOrderPartner(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid order id"})
+		return
+	}
+	var req struct {
+		PartnerID string `json:"partner_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	partnerID, err := uuid.Parse(req.PartnerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid partner_id"})
+		return
+	}
+	partner, err := h.repo.GetUserByID(c.Request.Context(), partnerID)
+	if err != nil || partner.Role != "partner" {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "partner user not found"})
+		return
+	}
+	if err := h.repo.UpdateOrderPartner(c.Request.Context(), orderID, partnerID); err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"order_id": orderID, "partner_id": partnerID}})
 }
 
 func (h *AdminHandler) createTicket(c *gin.Context) {

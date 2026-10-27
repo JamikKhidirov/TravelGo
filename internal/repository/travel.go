@@ -184,8 +184,8 @@ func (r *TravelRepository) GetDestinationByID(ctx context.Context, id uuid.UUID)
 
 func (r *TravelRepository) CreateTour(ctx context.Context, t *model.Tour) error {
 	query := `
-		INSERT INTO tours (id, destination_id, title, description, price, currency, duration_days, start_date, end_date, available, image_url, source, external_id)
-		VALUES (:id, :destination_id, :title, :description, :price, :currency, :duration_days, :start_date, :end_date, :available, :image_url, :source, :external_id)
+		INSERT INTO tours (id, destination_id, title, description, price, currency, duration_days, start_date, end_date, available, image_url, source, external_id, owner_id)
+		VALUES (:id, :destination_id, :title, :description, :price, :currency, :duration_days, :start_date, :end_date, :available, :image_url, :source, :external_id, NULLIF(:owner_id, CAST('00000000-0000-0000-0000-000000000000' AS uuid)))
 		ON CONFLICT (source, external_id) DO UPDATE SET
 			destination_id = EXCLUDED.destination_id,
 			title = EXCLUDED.title,
@@ -197,6 +197,7 @@ func (r *TravelRepository) CreateTour(ctx context.Context, t *model.Tour) error 
 			end_date = EXCLUDED.end_date,
 			available = EXCLUDED.available,
 			image_url = EXCLUDED.image_url,
+			owner_id = COALESCE(EXCLUDED.owner_id, tours.owner_id),
 			updated_at = NOW()
 		RETURNING id, created_at, updated_at
 	`

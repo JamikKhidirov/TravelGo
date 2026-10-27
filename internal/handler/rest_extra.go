@@ -172,6 +172,27 @@ func (h *TravelHandler) updateTour(c *gin.Context) {
 		return
 	}
 	t.ID = id
+	existing, err := h.svc.GetTour(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "tour not found"})
+		return
+	}
+	if c.GetString("user_role") == "guide" {
+		ownerID, parseErr := uuid.Parse(c.GetString("user_id"))
+		if parseErr != nil || existing.OwnerID != ownerID {
+			c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "you can only edit your own tours"})
+			return
+		}
+		t.OwnerID = ownerID
+	} else {
+		t.OwnerID = existing.OwnerID
+	}
+	if t.Source == "" {
+		t.Source = existing.Source
+	}
+	if t.ExternalID == "" {
+		t.ExternalID = existing.ExternalID
+	}
 	if err := h.svc.UpdateTour(c.Request.Context(), &t); err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
 		return
@@ -184,6 +205,14 @@ func (h *TravelHandler) deleteTour(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid id"})
 		return
+	}
+	if c.GetString("user_role") == "guide" {
+		existing, getErr := h.svc.GetTour(c.Request.Context(), id)
+		ownerID, parseErr := uuid.Parse(c.GetString("user_id"))
+		if getErr != nil || parseErr != nil || existing.OwnerID != ownerID {
+			c.JSON(http.StatusForbidden, model.Response{Success: false, Error: "you can only delete your own tours"})
+			return
+		}
 	}
 	if err := h.svc.DeleteTour(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})

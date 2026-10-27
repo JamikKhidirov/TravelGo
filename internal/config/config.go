@@ -107,6 +107,19 @@ func (c *Config) applyEnvOverrides() {
 	if v := os.Getenv("DB_NAME"); v != "" {
 		c.DB.Name = v
 	}
+	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.DB.MaxOpenConns = n
+		}
+	}
+	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.DB.MaxIdleConns = n
+		}
+	}
+	if v := os.Getenv("DB_CONN_MAX_LIFETIME"); v != "" {
+		c.DB.ConnMaxLifetime = v
+	}
 	if v := os.Getenv("REDIS_ADDR"); v != "" {
 		c.Redis.Addr = v
 	}
@@ -122,7 +135,28 @@ func (c *Config) validate() error {
 	if c.App.Port == 0 {
 		c.App.Port = 8080
 	}
+	if c.DB.MaxOpenConns <= 0 {
+		c.DB.MaxOpenConns = 25
+	}
+	if c.DB.MaxIdleConns <= 0 {
+		c.DB.MaxIdleConns = 10
+	}
+	if c.DB.MaxIdleConns > c.DB.MaxOpenConns {
+		c.DB.MaxIdleConns = c.DB.MaxOpenConns
+	}
+	if c.DB.ConnMaxLifetime == "" {
+		c.DB.ConnMaxLifetime = "300s"
+	}
 	return nil
+}
+
+// ConnMaxLifetimeDuration parses the configured pool connection lifetime.
+func (c *Config) ConnMaxLifetimeDuration() time.Duration {
+	d, err := time.ParseDuration(c.DB.ConnMaxLifetime)
+	if err != nil || d <= 0 {
+		return 5 * time.Minute
+	}
+	return d
 }
 
 func (c *Config) DSN() string {

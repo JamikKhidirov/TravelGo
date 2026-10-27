@@ -46,6 +46,8 @@
     <input id="token" placeholder="travel-token-...-admin-..." />
     <label>Admin user ID</label>
     <input id="userId" placeholder="uuid" />
+    <label>Role (dev header mode)</label>
+    <input id="role" value="admin" />
     <button class="secondary" onclick="saveAuth()">Save credentials</button>
     <p class="sub" style="margin-top:12px">Credentials are stored in localStorage. <a href="/swagger/index.html">Open Swagger</a></p>
   </section>
@@ -97,13 +99,16 @@ function headers() {
   const h = { "Content-Type": "application/json" };
   const token = $("token").value.trim();
   const userId = $("userId").value.trim();
+  const role = $("role").value.trim() || "admin";
   if (token) h["Authorization"] = "Bearer " + token;
   if (userId) h["X-User-Id"] = userId;
+  if (userId) h["X-User-Role"] = role;
   return h;
 }
 function saveAuth() {
   localStorage.setItem("admin_token", $("token").value.trim());
   localStorage.setItem("admin_user", $("userId").value.trim());
+  localStorage.setItem("admin_role", $("role").value.trim() || "admin");
   $("output").textContent = "Credentials saved.";
 }
 function show(data) { $("output").textContent = JSON.stringify(data, null, 2); }
@@ -145,6 +150,7 @@ async function loadProvider() {
 (function init() {
   $("token").value = localStorage.getItem("admin_token") || "";
   $("userId").value = localStorage.getItem("admin_user") || "";
+  $("role").value = localStorage.getItem("admin_role") || "admin";
   loadStats();
   loadProvider();
 })();

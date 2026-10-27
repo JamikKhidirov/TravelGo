@@ -23,6 +23,56 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 		updated_at TIMESTAMPTZ DEFAULT NOW()
 	);
 
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+	ALTER TABLE tours ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+	CREATE TABLE IF NOT EXISTS auth_sessions (
+		id UUID PRIMARY KEY,
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		refresh_token_hash TEXT UNIQUE NOT NULL,
+		device_name VARCHAR(150),
+		platform VARCHAR(50),
+		user_agent TEXT,
+		ip VARCHAR(80),
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+		expires_at TIMESTAMPTZ NOT NULL,
+		revoked_at TIMESTAMPTZ
+	);
+
+	CREATE TABLE IF NOT EXISTS oauth_codes (
+		code TEXT PRIMARY KEY,
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		client_id VARCHAR(100) NOT NULL,
+		redirect_uri TEXT NOT NULL,
+		scope TEXT,
+		code_challenge TEXT NOT NULL,
+		code_challenge_method VARCHAR(10) DEFAULT 'S256',
+		nonce TEXT,
+		expires_at TIMESTAMPTZ NOT NULL,
+		used_at TIMESTAMPTZ
+	);
+
+	CREATE TABLE IF NOT EXISTS user_mfa (
+		user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+		secret TEXT NOT NULL,
+		enabled BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		verified_at TIMESTAMPTZ
+	);
+
+	CREATE TABLE IF NOT EXISTS passkey_credentials (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		credential_id TEXT UNIQUE NOT NULL,
+		public_key TEXT,
+		attestation TEXT,
+		transports TEXT,
+		sign_count INTEGER DEFAULT 0,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		last_used_at TIMESTAMPTZ
+	);
+
 	CREATE TABLE IF NOT EXISTS carts (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		user_id UUID UNIQUE REFERENCES users(id),
@@ -57,6 +107,8 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 		created_at TIMESTAMPTZ DEFAULT NOW(),
 		updated_at TIMESTAMPTZ DEFAULT NOW()
 	);
+
+	ALTER TABLE orders ADD COLUMN IF NOT EXISTS partner_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
 	CREATE TABLE IF NOT EXISTS reviews (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -119,6 +171,13 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+	CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_auth_sessions_refresh ON auth_sessions(refresh_token_hash);
+	CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkey_credentials(user_id);
+	CREATE INDEX IF NOT EXISTS idx_passkeys_credential ON passkey_credentials(credential_id);
+	CREATE INDEX IF NOT EXISTS idx_tours_owner ON tours(owner_id);
+	CREATE INDEX IF NOT EXISTS idx_orders_partner ON orders(partner_id);
 	CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_device_tokens_platform ON device_tokens(platform);
 	CREATE INDEX IF NOT EXISTS idx_push_notifications_user ON push_notifications(user_id);
@@ -236,8 +295,8 @@ func (r *TravelRepository) ClearCart(ctx context.Context, cartID uuid.UUID) erro
 
 func (r *TravelRepository) CreateOrder(ctx context.Context, o *model.Order) error {
 	query := `
-		INSERT INTO orders (id, user_id, tour_id, destination_id, status, total_price, currency, passenger_name, passenger_email, passenger_phone, travel_date, nights, adults, children)
-		VALUES (:id, :user_id, :tour_id, :destination_id, :status, :total_price, :currency, :passenger_name, :passenger_email, :passenger_phone, :travel_date, :nights, :adults, :children)
+		INSERT INTO orders (id, user_id, tour_id, destination_id, status, total_price, currency, passenger_name, passenger_email, passenger_phone, travel_date, nights, adults, children, partner_id)
+		VALUES (:id, :user_id, :tour_id, :destination_id, :status, :total_price, :currency, :passenger_name, :passenger_email, :passenger_phone, :travel_date, :nights, :adults, :children, NULLIF(:partner_id, CAST('00000000-0000-0000-0000-000000000000' AS uuid)))
 		RETURNING id, created_at, updated_at
 	`
 	rows, err := r.db.NamedQueryContext(ctx, query, o)
@@ -432,7 +491,8 @@ func (r *TravelRepository) DeleteDestination(ctx context.Context, id uuid.UUID) 
 
 func (r *TravelRepository) UpdateTour(ctx context.Context, t *model.Tour) error {
 	query := `
-		UPDATE tours SET destination_id = :destination_id, title = :title, description = :description, price = :price, currency = :currency, duration_days = :duration_days, start_date = :start_date, end_date = :end_date, available = :available, image_url = :image_url, source = :source, external_id = :external_id, updated_at = NOW()
+		UPDATE tours SET destination_id = :destination_id, title = :title, description = :description, price = :price, currency = :currency, duration_days = :duration_days, start_date = :start_date, end_date = :end_date, available = :available, image_url = :image_url, source = :source, external_id = :external_id,
+			owner_id = COALESCE(NULLIF(:owner_id, CAST('00000000-0000-0000-0000-000000000000' AS uuid)), owner_id), updated_at = NOW()
 		WHERE id = :id
 	`
 	_, err := r.db.NamedExecContext(ctx, query, t)

@@ -47,6 +47,12 @@ func (s *TicketService) Create(ctx context.Context, t *model.Ticket) error {
 	if t.Currency == "" {
 		t.Currency = "USD"
 	}
+	if t.Source == "" {
+		t.Source = "manual"
+	}
+	if t.ExternalID == "" {
+		t.ExternalID = t.ID.String()
+	}
 	return s.repo.CreateTicket(ctx, t)
 }
 
