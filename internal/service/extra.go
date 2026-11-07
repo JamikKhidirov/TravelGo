@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -201,19 +202,30 @@ func (s *VoucherService) ListVouchers(ctx context.Context, destID *uuid.UUID, p 
 	return s.repo.GetVouchers(ctx, destID, p)
 }
 
-func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string, keepSession ...uuid.UUID) error {
 	u, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(oldPassword)); err != nil {
+		s.track(ctx, &model.DeviceInfo{}, u, u.Email, "password_change_failed", "invalid old password", false, nil, nil)
 		return errors.New("invalid old password")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	return s.repo.UpdateUserPassword(ctx, userID, string(hash))
+	if err := s.repo.UpdateUserPassword(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+	var keep *uuid.UUID
+	if len(keepSession) > 0 && keepSession[0] != uuid.Nil {
+		keep = &keepSession[0]
+	}
+	revoked, _ := s.repo.RevokeAllSessions(ctx, userID, keep)
+	s.track(ctx, &model.DeviceInfo{}, u, u.Email, "password_changed",
+		fmt.Sprintf("%d other sessions revoked", revoked), true, keep, nil)
+	return nil
 }
 
 func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, phone string) (*model.User, error) {

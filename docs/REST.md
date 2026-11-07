@@ -27,7 +27,8 @@
 Authorization: Bearer <access_token>
 ```
 
-Для локальной разработки и админ-панели сохранён fallback через заголовки (отключайте в production):
+Для локальной разработки можно включить fallback через заголовки (`security.allow_header_auth: true`).
+По умолчанию он выключен и принудительно отключается в production:
 
 ```http
 X-User-Id: <uuid>
@@ -63,7 +64,9 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
       "id_token": "<OIDC ID token>",
       "token_type": "Bearer",
       "expires_in": 1800,
-      "session_id": "uuid"
+      "session_id": "uuid",
+      "device_id": "uuid",
+      "scope": "openid profile email"
     }
   }
 }
@@ -89,8 +92,12 @@ curl -X POST http://localhost:8080/api/v1/auth/login/mfa \
 ```
 
 Refresh-токены одноразовые: каждый `/auth/refresh` возвращает новую пару, старый refresh
-инвалидируется. Access-токен привязан к сессии (`sid`) и перестаёт работать после
-revoke-сессии или `logout-all`.
+инвалидируется атомарно по хешу. Access-токен привязан к сессии (`sid`) и перестаёт работать
+после revoke-сессии, блокировки пользователя/устройства или `logout-all`.
+
+Защита от подбора: после `security.max_failed_logins` неудачных попыток за
+`security.lockout_minutes` логин возвращает `429 Too Many Requests`; заблокированный
+аккаунт или устройство — `403 Forbidden`. Все попытки попадают в `auth_events`.
 
 ### Роли и RBAC/ABAC
 
@@ -212,9 +219,17 @@ curl -X POST http://localhost:8080/api/v1/tours \
 | POST | `/api/v1/auth/refresh` | Ротация refresh-токена |
 | POST | `/api/v1/auth/logout` | Выйти на текущем устройстве |
 | POST | `/api/v1/auth/logout-all` | Выйти на всех устройствах |
+| POST | `/api/v1/auth/logout-others` | Выйти на всех, кроме текущей сессии |
 | GET | `/api/v1/auth/sessions` | Сессии, устройства, IP, время входа + сводка |
-| GET | `/api/v1/auth/devices` | Алиас `/auth/sessions` |
-| DELETE | `/api/v1/auth/sessions/{id}` | Отозвать конкретную сессию |
+| GET | `/api/v1/auth/sessions/{id}/ips` | История IP конкретной сессии |
+| DELETE | `/api/v1/auth/sessions/{id}` | Отозвать конкретную сессию (404 если чужая) |
+| GET | `/api/v1/auth/devices` | Агрегированные устройства аккаунта |
+| GET | `/api/v1/auth/devices/{id}` | Устройство и его IP-история |
+| POST | `/api/v1/auth/devices/{id}/trust` | Пометить устройство доверенным |
+| POST | `/api/v1/auth/devices/{id}/block` | Заблокировать устройство и его сессии |
+| DELETE | `/api/v1/auth/devices/{id}` | Удалить устройство и отозвать сессии |
+| GET | `/api/v1/auth/login-history` | История входов и security-событий |
+| GET | `/api/v1/auth/security/summary` | Сводка безопасности аккаунта |
 | GET | `/api/v1/auth/me` | Текущий пользователь и `session_id` |
 | GET | `/api/v1/auth/profile` | Профиль |
 | PUT | `/api/v1/auth/profile` | Обновить профиль |
@@ -275,15 +290,100 @@ curl -X POST http://localhost:8080/api/v1/auth/change-password \
 ```
 
 Название и платформа устройства берутся из заголовков `X-Device-Name` /
-`X-Device-Platform`, иначе определяются из `User-Agent`. IP фиксируется на момент
-логина. `last_seen_at` обновляется не чаще раза в минуту.
+`X-Device-Platform`, иначе определяются из `User-Agent`. IP фиксируется при логине и
+дополнительно накапливается в `session_ips` при каждом запросе; `last_seen_at`
+обновляется не чаще раза в минуту.
 
-Выйти на всех устройствах:
+`GET /auth/devices` группирует сессии в устройства по fingerprint:
+
+```json
+{
+  "success": true,
+  "data": {
+    "devices": [
+      {
+        "id": "uuid",
+        "fingerprint": "9f2c...",
+        "name": "iPhone 15",
+        "platform": "ios",
+        "first_ip": "203.0.113.10",
+        "last_ip": "203.0.113.11",
+        "login_count": 4,
+        "first_seen_at": "2026-10-01T10:00:00Z",
+        "last_seen_at": "2026-10-27T12:05:11Z",
+        "trusted": true,
+        "blocked": false,
+        "active_sessions": 1,
+        "current": true,
+        "ips": ["203.0.113.10", "203.0.113.11"],
+        "session_ids": ["uuid"]
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+История IP конкретной сессии:
+
+```bash
+curl http://localhost:8080/api/v1/auth/sessions/$SESSION_ID/ips \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Управление устройством:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/devices/$DEVICE_ID/trust \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"trusted":true}'
+
+curl -X POST http://localhost:8080/api/v1/auth/devices/$DEVICE_ID/block \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"blocked":true}'
+
+curl -X DELETE http://localhost:8080/api/v1/auth/devices/$DEVICE_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Выйти на всех устройствах или на всех, кроме текущего:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/logout-all \
   -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://localhost:8080/api/v1/auth/logout-others \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+### История входов и аудит
+
+Все события аутентификации пишутся в `auth_events`: `register`, `login_success`,
+`login_failed`, `login_blocked`, `mfa_required`, `mfa_success`, `mfa_failed`,
+`passkey_login`, `oauth_login`, `oauth_code_issued`, `token_refresh`, `refresh_failed`,
+`logout`, `logout_all`, `password_changed`, `device_trusted`, `device_blocked`,
+`admin_user_blocked` и другие.
+
+```bash
+curl "http://localhost:8080/api/v1/auth/login-history?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Событие содержит `event`, `success`, `reason`, `ip`, `user_agent`, `platform`,
+`device_name`, `session_id`, `device_id`, `request_id`, `metadata`, `created_at`.
+Неудачные попытки видны владельцу аккаунта и администратору.
+
+Сводка безопасности:
+
+```bash
+curl http://localhost:8080/api/v1/auth/security/summary \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Возвращает `total_devices`, `trusted_devices`, `blocked_devices`, `active_sessions`,
+`unique_ips`, `last_login_at`, `last_failed_login_at`, `successful_logins_24h`,
+`failed_logins_24h`, `mfa_enabled`, `passkeys`, `account_blocked`, `recent_events`,
+`recent_ips`.
 
 ### MFA (TOTP)
 
@@ -297,7 +397,9 @@ curl -X POST http://localhost:8080/api/v1/auth/mfa/enable \
   -d '{"code":"123456"}'
 ```
 
-Параметры: SHA1, 6 цифр, период 30 секунд, issuer `GoTravel`.
+Параметры: SHA1, 6 цифр, период 30 секунд, issuer `GoTravel`. Сервер принимает
+текущий шаг ±1, но каждый успешно использованный шаг сохраняется в `user_mfa.last_step`,
+поэтому повторно отправить тот же код нельзя.
 
 ### Passkeys (WebAuthn)
 
@@ -316,6 +418,10 @@ curl -X POST http://localhost:8080/api/v1/auth/mfa/enable \
 | POST | `/api/v1/oauth/revoke` | Отзыв refresh-токена |
 | GET | `/api/v1/oauth/jwks` | JWKS (HS256 — пустой набор ключей) |
 | GET | `/api/v1/.well-known/openid-configuration` | OIDC discovery |
+
+`GET /oauth/authorize` с браузерным клиентом отвечает `302` на `redirect_uri` с
+параметрами `code` и `state`; `POST /oauth/authorize` возвращает JSON. Ответы
+`/oauth/token` содержат `scope` и `device_id` и отдаются с `Cache-Control: no-store`.
 
 Мобильные клиенты используют Authorization Code + PKCE (`S256`):
 
@@ -493,6 +599,19 @@ curl -X POST http://localhost:8080/api/v1/admin/push \
 | POST | `/api/v1/admin/push` | Отправить push |
 | POST | `/api/v1/admin/sync` | Запустить синхронизацию |
 | GET | `/api/v1/admin/sync-jobs` | История синхронизаций |
+| GET | `/api/v1/admin/security/events` | Глобальный аудит с фильтрами |
+| GET | `/api/v1/admin/security/stats` | Статистика безопасности |
+| GET | `/api/v1/admin/sessions` | Все сессии |
+| GET | `/api/v1/admin/users/{id}/sessions` | Сессии пользователя |
+| GET | `/api/v1/admin/users/{id}/devices` | Устройства пользователя |
+| GET | `/api/v1/admin/users/{id}/events` | События пользователя |
+| POST | `/api/v1/admin/users/{id}/block` | Заблокировать пользователя |
+| POST | `/api/v1/admin/users/{id}/unblock` | Разблокировать пользователя |
+| POST | `/api/v1/admin/users/{id}/logout-all` | Отозвать все сессии пользователя |
+
+Фильтры `/admin/security/events`: `user_id`, `email`, `event`, `ip`, `success`,
+`from`, `to` (RFC3339 или `YYYY-MM-DD`), `limit` (<=500), `offset`.
+`/admin/security/stats?hours=24` возвращает счётчики, топ IP/устройств и разбивку по дням.
 
 ## Swagger и Postman
 
@@ -508,6 +627,7 @@ curl -X POST http://localhost:8080/api/v1/admin/push \
 | 201 | Created |
 | 400 | Некорректные параметры |
 | 401 | Неверные credentials |
-| 403 | Недостаточно прав |
+| 403 | Недостаточно прав / аккаунт или устройство заблокированы |
 | 404 | Не найдено |
+| 429 | Превышен rate limit или lockout после неудачных входов |
 | 500 | Внутренняя ошибка |

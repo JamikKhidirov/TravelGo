@@ -14,18 +14,27 @@ import (
 // AuthMiddleware validates signed access tokens, checks that the backing
 // session has not been revoked and exposes user_id/user_role to handlers.
 //
-// For local development and scripts without a token it still accepts the
-// legacy X-User-Id / X-User-Role pair. This fallback must not be used in
-// production; put the service behind a trusted gateway if you keep it enabled.
+// The legacy X-User-Id / X-User-Role pair is available only when explicitly
+// enabled (development). Never enable it in production: a client could forge
+// any identity and role.
 type AuthMiddleware struct {
 	secret       []byte
 	repo         *repository.TravelRepository
 	headerFallbk bool
 }
 
-func NewAuthMiddleware(secret []byte, repo *repository.TravelRepository) *AuthMiddleware {
-	return &AuthMiddleware{secret: secret, repo: repo, headerFallbk: true}
+// NewAuthMiddleware creates the middleware. The legacy header fallback is off
+// unless allowHeaderAuth is explicitly true.
+func NewAuthMiddleware(secret []byte, repo *repository.TravelRepository, allowHeaderAuth ...bool) *AuthMiddleware {
+	allow := false
+	if len(allowHeaderAuth) > 0 {
+		allow = allowHeaderAuth[0]
+	}
+	return &AuthMiddleware{secret: secret, repo: repo, headerFallbk: allow}
 }
+
+// HeaderFallbackEnabled reports whether the insecure development fallback is on.
+func (m *AuthMiddleware) HeaderFallbackEnabled() bool { return m.headerFallbk }
 
 func (m *AuthMiddleware) resolve(c *gin.Context) {
 	if c.GetString("user_id") != "" {
@@ -57,6 +66,18 @@ func (m *AuthMiddleware) resolve(c *gin.Context) {
 			if role == "" {
 				role = "user"
 			}
+			// Even in development the user must exist and must not be blocked.
+			if m.repo != nil {
+				if id, err := uuid.Parse(uid); err == nil {
+					if u, err := m.repo.GetUserByID(c.Request.Context(), id); err == nil && !u.Blocked {
+						role = u.Role
+					} else {
+						return
+					}
+				} else {
+					return
+				}
+			}
 			c.Set("user_id", uid)
 			c.Set("user_role", role)
 			c.Set("auth_method", "header")
@@ -72,7 +93,11 @@ func (m *AuthMiddleware) applyClaims(c *gin.Context, claims security.Claims) boo
 	sidStr := security.StringClaim(claims, "sid")
 	role := security.StringClaim(claims, "role")
 
-	if m.repo != nil && sidStr != "" {
+	if m.repo != nil {
+		if sidStr == "" {
+			// Access tokens must be bound to a live session.
+			return false
+		}
 		sid, err := uuid.Parse(sidStr)
 		if err != nil {
 			return false
@@ -82,15 +107,24 @@ func (m *AuthMiddleware) applyClaims(c *gin.Context, claims security.Claims) boo
 			return false
 		}
 		c.Set("session_id", sidStr)
+		c.Set("session_device_id", "")
+		if session.DeviceID != nil {
+			c.Set("session_device_id", session.DeviceID.String())
+		}
 		// Keep "last seen" fresh without writing on every single request.
 		if time.Since(session.LastSeenAt) > time.Minute {
-			m.repo.TouchSession(c.Request.Context(), sid)
+			m.repo.TouchSession(c.Request.Context(), sid, c.ClientIP())
 		}
-		if uid, err := uuid.Parse(sub); err == nil {
-			if u, err := m.repo.GetUserByID(c.Request.Context(), uid); err == nil {
-				role = u.Role
-			}
+		uid, err := uuid.Parse(sub)
+		if err != nil {
+			return false
 		}
+		u, err := m.repo.GetUserByID(c.Request.Context(), uid)
+		if err != nil || u.Blocked {
+			return false
+		}
+		role = u.Role
+		c.Set("user", u)
 	}
 
 	c.Set("user_id", sub)

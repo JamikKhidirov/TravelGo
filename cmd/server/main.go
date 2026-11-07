@@ -131,10 +131,16 @@ func main() {
 		jwtSecret = "travel-secret"
 		slog.Warn("JWT_SECRET is not set, using insecure development default")
 	}
-	authMW := middleware.NewAuthMiddleware([]byte(jwtSecret), repo)
+	authMW := middleware.NewAuthMiddleware([]byte(jwtSecret), repo, cfg.Security.AllowHeaderAuth)
+	if authMW.HeaderFallbackEnabled() {
+		slog.Warn("X-User-Id/X-User-Role fallback is enabled; do not use it in production")
+	}
 
 	travelSvc := service.NewTravelService(repo)
-	authSvc := service.NewAuthService(repo, jwtSecret)
+	authSvc := service.NewAuthService(repo, jwtSecret, service.AuthOptions{
+		MaxFailedLogins: cfg.Security.MaxFailedLogins,
+		LockoutWindow:   time.Duration(cfg.Security.LockoutMinutes) * time.Minute,
+	})
 	cartSvc := service.NewCartService(repo)
 	orderSvc := service.NewOrderService(repo)
 	paymentSvc := service.NewPaymentService(repo)
@@ -159,7 +165,22 @@ func main() {
 	adminH := handler.NewAdminHandler(repo, syncSvc, travelSvc, voucherSvc, ticketSvc)
 
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery(), authMW.Optional())
+	if err := r.SetTrustedProxies(cfg.Security.TrustedProxies); err != nil {
+		slog.Warn("failed to configure trusted proxies", "err", err)
+	}
+	var globalLimiter, authLimiter *middleware.RateLimiter
+	if cfg.RateLimitEnabled() {
+		globalLimiter = middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute)
+		authLimiter = middleware.NewRateLimiter(cfg.RateLimit.AuthRequestsPerMinute)
+	}
+	r.Use(
+		middleware.RequestID(),
+		middleware.SecurityHeaders(),
+		gin.Logger(),
+		gin.Recovery(),
+		middleware.AdaptiveRateLimit(globalLimiter, authLimiter),
+		authMW.Optional(),
+	)
 
 	// Swagger UI — отдаём YAML спецификацию напрямую
 	r.GET("/swagger/index.html", func(c *gin.Context) {
@@ -178,8 +199,14 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"success": true, "data": gin.H{"status": "ok"}})
 	})
+	r.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{"success": true, "data": gin.H{
+			"name": "GoTravel API", "version": "1.5.0", "env": cfg.App.Env,
+		}})
+	})
 
 	api := r.Group("/api/v1")
+	api.Use(middleware.NoStore())
 	api.Use(authMW.Optional())
 	authH.RegisterRoutes(api, authMW)
 	cartH.RegisterRoutes(api)
@@ -190,6 +217,14 @@ func main() {
 	ticketH.RegisterRoutes(api)
 	pushH.RegisterRoutes(api, authMW)
 	adminH.RegisterRoutes(api, authMW.RequireRoles("admin"))
+
+	// Security janitor: expires stale sessions and trims the audit trail.
+	janitorCtx, stopJanitor := context.WithCancel(context.Background())
+	defer stopJanitor()
+	go service.StartJanitor(janitorCtx, repo,
+		time.Duration(cfg.Security.SessionCleanupMinutes)*time.Minute,
+		time.Duration(cfg.Security.EventRetentionDays)*24*time.Hour,
+	)
 
 	wsHub := handler.NewWSHub()
 	go wsHub.Run()

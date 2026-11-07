@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: GoTravel API
-  description: Travel service in Go. Aggregates destinations and tours from multiple MSP servers, stores data in PostgreSQL, caches in Redis, streams realtime geolocation over WebSocket and exposes REST endpoints.
-  version: 1.4.0
+  description: Travel service in Go. Aggregates destinations and tours from multiple MSP servers, stores data in PostgreSQL, caches in Redis, streams realtime geolocation over WebSocket and exposes REST endpoints. Version 1.5 adds full authentication tracking (devices, IP history, login history, audit events, admin security tooling).
+  version: 1.5.0
 servers:
   - url: http://localhost:8080
     description: Local Docker
@@ -16,6 +16,7 @@ tags:
   - name: sync
   - name: auth
   - name: sessions
+  - name: security
   - name: mfa
   - name: passkeys
   - name: oauth
@@ -445,6 +446,115 @@ components:
         sent_count: { type: integer }
         failed_count: { type: integer }
         created_at: { type: string, format: date-time }
+    UserDevice:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        fingerprint: { type: string }
+        name: { type: string, example: Chrome on Windows }
+        platform: { type: string, enum: [web, ios, android, desktop, api] }
+        user_agent: { type: string }
+        first_ip: { type: string, example: 203.0.113.10 }
+        last_ip: { type: string, example: 203.0.113.10 }
+        login_count: { type: integer }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        trusted: { type: boolean }
+        blocked: { type: boolean }
+        active_sessions: { type: integer }
+        current: { type: boolean }
+        ips:
+          type: array
+          items: { type: string }
+        session_ids:
+          type: array
+          items: { type: string, format: uuid }
+    SessionIP:
+      type: object
+      properties:
+        session_id: { type: string, format: uuid }
+        ip: { type: string, example: 203.0.113.10 }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        request_count: { type: integer }
+    AuthEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid, nullable: true }
+        email: { type: string, format: email }
+        event: { type: string, example: login_success }
+        success: { type: boolean }
+        reason: { type: string }
+        session_id: { type: string, format: uuid, nullable: true }
+        device_id: { type: string, format: uuid, nullable: true }
+        ip: { type: string }
+        user_agent: { type: string }
+        platform: { type: string }
+        device_name: { type: string }
+        request_id: { type: string }
+        metadata: { type: object }
+        created_at: { type: string, format: date-time }
+    IPCount:
+      type: object
+      properties:
+        ip: { type: string }
+        count: { type: integer }
+    SecuritySummary:
+      type: object
+      properties:
+        total_devices: { type: integer }
+        trusted_devices: { type: integer }
+        blocked_devices: { type: integer }
+        total_sessions: { type: integer }
+        active_sessions: { type: integer }
+        unique_ips:
+          type: array
+          items: { type: string }
+        last_login_at: { type: string, format: date-time }
+        last_failed_login_at: { type: string, format: date-time }
+        successful_logins_24h: { type: integer }
+        failed_logins_24h: { type: integer }
+        mfa_enabled: { type: boolean }
+        passkeys: { type: integer }
+        account_blocked: { type: boolean }
+        recent_events:
+          type: array
+          items: { $ref: '#/components/schemas/AuthEvent' }
+        recent_ips:
+          type: array
+          items: { $ref: '#/components/schemas/IPCount' }
+    AdminSecurityStats:
+      type: object
+      properties:
+        events_24h: { type: integer }
+        successful_logins_24h: { type: integer }
+        failed_logins_24h: { type: integer }
+        blocked_logins_24h: { type: integer }
+        unique_ips_24h: { type: integer }
+        active_sessions: { type: integer }
+        total_devices: { type: integer }
+        blocked_users: { type: integer }
+        top_ips:
+          type: array
+          items: { $ref: '#/components/schemas/IPCount' }
+        top_devices:
+          type: array
+          items:
+            type: object
+            properties:
+              device: { type: string }
+              platform: { type: string }
+              count: { type: integer }
+        events_by_day:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: string }
+              success: { type: integer }
+              failed: { type: integer }
 security:
   - bearerAuth: []
   - userHeader: []
@@ -787,10 +897,142 @@ paths:
         '401': { description: Unauthorized }
   /api/v1/auth/devices:
     get:
-      tags: [sessions]
-      summary: Alias of /auth/sessions
+      tags: [sessions, security]
+      summary: List known devices of the current account
+      description: Aggregated device profiles with first/last IP, login count, trust/block flags, IP history and active session IDs.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          devices:
+                            type: array
+                            items: { $ref: '#/components/schemas/UserDevice' }
+                          total: { type: integer }
+        '401': { description: Unauthorized }
+  /api/v1/auth/devices/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [sessions, security]
+      summary: Get one device with its IP history
       responses:
         '200': { description: OK }
+        '404': { description: Device not found }
+    delete:
+      tags: [sessions, security]
+      summary: Remove a device and revoke all its sessions
+      responses:
+        '200': { description: Device removed }
+        '404': { description: Device not found }
+  /api/v1/auth/devices/{id}/trust:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [sessions, security]
+      summary: Mark a device as trusted or untrusted
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trusted: { type: boolean, default: true }
+      responses:
+        '200': { description: Trust flag updated }
+        '404': { description: Device not found }
+  /api/v1/auth/devices/{id}/block:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [sessions, security]
+      summary: Block a device and revoke its sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blocked: { type: boolean, default: true }
+      responses:
+        '200': { description: Block flag updated }
+        '404': { description: Device not found }
+  /api/v1/auth/login-history:
+    get:
+      tags: [security]
+      summary: Login and security event history of the current account
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuthEvent' }
+        '401': { description: Unauthorized }
+  /api/v1/auth/security/summary:
+    get:
+      tags: [security]
+      summary: Security dashboard for the current account
+      description: Devices, sessions, unique IPs, recent events, 24h login counters, MFA and passkey status.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SecuritySummary' }
+        '401': { description: Unauthorized }
+  /api/v1/auth/logout-others:
+    post:
+      tags: [sessions, security]
+      summary: Revoke all sessions except the current one
+      responses:
+        '200': { description: Other sessions revoked }
+        '401': { description: Unauthorized }
+  /api/v1/auth/sessions/{id}/ips:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [sessions, security]
+      summary: IP history of one session
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          session_id: { type: string, format: uuid }
+                          ips:
+                            type: array
+                            items: { $ref: '#/components/schemas/SessionIP' }
         '401': { description: Unauthorized }
   /api/v1/auth/sessions/{id}:
     parameters:
@@ -1250,6 +1492,129 @@ paths:
         - $ref: '#/components/parameters/PageSize'
       responses:
         '200': { description: OK }
+  /api/v1/admin/security/events:
+    get:
+      tags: [admin, security]
+      summary: Search the global authentication audit trail
+      parameters:
+        - { name: user_id, in: query, schema: { type: string, format: uuid } }
+        - { name: email, in: query, schema: { type: string, format: email } }
+        - { name: event, in: query, schema: { type: string, example: login_failed } }
+        - { name: ip, in: query, schema: { type: string } }
+        - { name: success, in: query, schema: { type: boolean } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuthEvent' }
+        '401': { description: Unauthorized }
+        '403': { description: Admin role required }
+  /api/v1/admin/security/stats:
+    get:
+      tags: [admin, security]
+      summary: Aggregated security statistics
+      parameters:
+        - { name: hours, in: query, schema: { type: integer, default: 24, maximum: 2160 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          window_hours: { type: integer }
+                          since: { type: string, format: date-time }
+                          stats: { $ref: '#/components/schemas/AdminSecurityStats' }
+  /api/v1/admin/sessions:
+    get:
+      tags: [admin, security, sessions]
+      summary: List all active and revoked sessions
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/users/{id}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [admin, security, sessions]
+      summary: Sessions of a specific user
+      responses:
+        '200': { description: OK }
+        '404': { description: User not found }
+  /api/v1/admin/users/{id}/devices:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [admin, security]
+      summary: Devices of a specific user
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/users/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [admin, security]
+      summary: Audit events of a specific user
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { description: OK }
+  /api/v1/admin/users/{id}/block:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [admin, security]
+      summary: Block a user and revoke all sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, example: suspicious activity }
+      responses:
+        '200': { description: User blocked }
+        '400': { description: Cannot block your own account }
+        '404': { description: User not found }
+  /api/v1/admin/users/{id}/unblock:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [admin, security]
+      summary: Unblock a user
+      responses:
+        '200': { description: User unblocked }
+        '404': { description: User not found }
+  /api/v1/admin/users/{id}/logout-all:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [admin, security, sessions]
+      summary: Revoke all sessions of a user
+      responses:
+        '200': { description: Sessions revoked }
+        '404': { description: User not found }
   /api/v1/admin/orders:
     get:
       tags: [admin]

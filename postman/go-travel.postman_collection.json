@@ -62,6 +62,10 @@
       "value": ""
     },
     {
+      "key": "deviceId",
+      "value": ""
+    },
+    {
       "key": "mfaToken",
       "value": ""
     },
@@ -672,6 +676,186 @@
               }
             ],
             "url": "{{baseUrl}}/api/v1/auth/sessions/{{sessionId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login-history?limit=50&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data || [];",
+                  "console.log('events:', data.length);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Security Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/security/summary"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || {};",
+                  "pm.test('has devices', () => pm.expect(d).to.have.property('total_devices'));",
+                  "console.log('unique ips:', JSON.stringify(d.unique_ips));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/devices"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const devices = (pm.response.json().data || {}).devices || [];",
+                  "if (devices.length) pm.collectionVariables.set('deviceId', devices[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Device Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/devices/{{deviceId}}"
+          }
+        },
+        {
+          "name": "Trust Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trusted\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/devices/{{deviceId}}/trust"
+          }
+        },
+        {
+          "name": "Block Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blocked\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/devices/{{deviceId}}/block"
+          }
+        },
+        {
+          "name": "Remove Device",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/devices/{{deviceId}}"
+          }
+        },
+        {
+          "name": "Session IP History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/sessions/{{sessionId}}/ips"
+          }
+        },
+        {
+          "name": "Logout Other Devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout-others"
           },
           "event": [
             {
@@ -1609,6 +1793,79 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/api/v1/admin/users?page=1&page_size=20"
+          }
+        },
+        {
+          "name": "Security Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/security/stats?hours=24"
+          }
+        },
+        {
+          "name": "Security Events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/security/events?limit=100&event=login_failed"
+          }
+        },
+        {
+          "name": "All Sessions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/sessions?limit=100&offset=0"
+          }
+        },
+        {
+          "name": "User Sessions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/sessions"
+          }
+        },
+        {
+          "name": "User Devices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/devices"
+          }
+        },
+        {
+          "name": "User Events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/events?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Block User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"suspicious activity\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/block"
+          }
+        },
+        {
+          "name": "Unblock User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/unblock"
+          }
+        },
+        {
+          "name": "Force Logout User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/logout-all"
           }
         },
         {

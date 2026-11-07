@@ -11,12 +11,14 @@ import (
 )
 
 type Config struct {
-	App    AppConfig    `yaml:"app"`
-	DB     DBConfig     `yaml:"db"`
-	Redis  RedisConfig  `yaml:"redis"`
-	Kafka  KafkaConfig  `yaml:"kafka"`
-	Server ServerConfig `yaml:"server"`
-	Mock   MockConfig   `yaml:"mock"`
+	App       AppConfig       `yaml:"app"`
+	DB        DBConfig        `yaml:"db"`
+	Redis     RedisConfig     `yaml:"redis"`
+	Kafka     KafkaConfig     `yaml:"kafka"`
+	Server    ServerConfig    `yaml:"server"`
+	Mock      MockConfig      `yaml:"mock"`
+	Security  SecurityConfig  `yaml:"security"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
 }
 
 type AppConfig struct {
@@ -59,6 +61,31 @@ type ServerConfig struct {
 type MockConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	BaseURL string `yaml:"base_url"`
+}
+
+// SecurityConfig controls proxy trust, auth hardening and data retention.
+type SecurityConfig struct {
+	TrustedProxies        []string `yaml:"trusted_proxies"`
+	AllowHeaderAuth       bool     `yaml:"allow_header_auth"`
+	EventRetentionDays    int      `yaml:"event_retention_days"`
+	SessionCleanupMinutes int      `yaml:"session_cleanup_minutes"`
+	MaxFailedLogins       int      `yaml:"max_failed_logins"`
+	LockoutMinutes        int      `yaml:"lockout_minutes"`
+}
+
+// RateLimitConfig enables per-IP request limiting.
+type RateLimitConfig struct {
+	Enabled               *bool `yaml:"enabled"`
+	RequestsPerMinute     int   `yaml:"requests_per_minute"`
+	AuthRequestsPerMinute int   `yaml:"auth_requests_per_minute"`
+}
+
+// RateLimitEnabled reports whether limiting is on (default: on).
+func (c *Config) RateLimitEnabled() bool {
+	if c.RateLimit.Enabled == nil {
+		return true
+	}
+	return *c.RateLimit.Enabled
 }
 
 func Load(path string) (*Config, error) {
@@ -126,6 +153,46 @@ func (c *Config) applyEnvOverrides() {
 	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
 		c.Kafka.Brokers = strings.Split(v, ",")
 	}
+	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
+		c.Security.TrustedProxies = strings.Split(v, ",")
+	}
+	if v := os.Getenv("ALLOW_HEADER_AUTH"); v != "" {
+		c.Security.AllowHeaderAuth = v == "true" || v == "1"
+	}
+	if v := os.Getenv("AUTH_EVENT_RETENTION_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Security.EventRetentionDays = n
+		}
+	}
+	if v := os.Getenv("SESSION_CLEANUP_MINUTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Security.SessionCleanupMinutes = n
+		}
+	}
+	if v := os.Getenv("AUTH_MAX_FAILED_LOGINS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Security.MaxFailedLogins = n
+		}
+	}
+	if v := os.Getenv("AUTH_LOCKOUT_MINUTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Security.LockoutMinutes = n
+		}
+	}
+	if v := os.Getenv("RATE_LIMIT_ENABLED"); v != "" {
+		b := v == "true" || v == "1"
+		c.RateLimit.Enabled = &b
+	}
+	if v := os.Getenv("RATE_LIMIT_PER_MINUTE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.RateLimit.RequestsPerMinute = n
+		}
+	}
+	if v := os.Getenv("AUTH_RATE_LIMIT_PER_MINUTE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.RateLimit.AuthRequestsPerMinute = n
+		}
+	}
 }
 
 func (c *Config) validate() error {
@@ -146,6 +213,28 @@ func (c *Config) validate() error {
 	}
 	if c.DB.ConnMaxLifetime == "" {
 		c.DB.ConnMaxLifetime = "300s"
+	}
+	if c.Security.EventRetentionDays <= 0 {
+		c.Security.EventRetentionDays = 180
+	}
+	if c.Security.SessionCleanupMinutes <= 0 {
+		c.Security.SessionCleanupMinutes = 30
+	}
+	if c.Security.MaxFailedLogins <= 0 {
+		c.Security.MaxFailedLogins = 5
+	}
+	if c.Security.LockoutMinutes <= 0 {
+		c.Security.LockoutMinutes = 15
+	}
+	if c.RateLimit.RequestsPerMinute <= 0 {
+		c.RateLimit.RequestsPerMinute = 120
+	}
+	if c.RateLimit.AuthRequestsPerMinute <= 0 {
+		c.RateLimit.AuthRequestsPerMinute = 10
+	}
+	// Header-based identity is a development-only shortcut.
+	if c.App.Env == "production" {
+		c.Security.AllowHeaderAuth = false
 	}
 	return nil
 }

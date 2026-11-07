@@ -34,3 +34,18 @@ server:
 mock:
   enabled: true
   base_url: http://localhost:8081
+
+security:
+  # Empty list disables X-Forwarded-For trust (safe default).
+  trusted_proxies: []
+  # Development-only X-User-Id/X-User-Role fallback. Always disabled in production.
+  allow_header_auth: false
+  event_retention_days: 180
+  session_cleanup_minutes: 30
+  max_failed_logins: 5
+  lockout_minutes: 15
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  auth_requests_per_minute: 10

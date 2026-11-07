@@ -86,13 +86,36 @@
   </section>
 
   <section class="card">
+    <h2>Security &amp; audit</h2>
+    <div id="securityStats" class="stats"></div>
+    <button onclick="loadSecurity()">Refresh security stats</button>
+    <label>User ID (optional)</label>
+    <input id="secUser" placeholder="uuid" />
+    <div class="row">
+      <div>
+        <label>Event</label>
+        <input id="secEvent" placeholder="login_failed" />
+      </div>
+      <div>
+        <label>IP</label>
+        <input id="secIP" placeholder="1.2.3.4" />
+      </div>
+    </div>
+    <button class="secondary" onclick="loadEvents()">Load audit events</button>
+    <pre id="events" style="margin-top:12px">No events loaded.</pre>
+    <button class="secondary" onclick="blockUser()">Block user</button>
+    <button class="secondary" onclick="unblockUser()">Unblock user</button>
+    <button class="secondary" onclick="logoutUser()">Force logout user</button>
+  </section>
+
+  <section class="card">
     <h2>Response</h2>
     <pre id="output">Ready.</pre>
     <button class="secondary" onclick="loadHistory()">Load push history</button>
     <pre id="history" style="margin-top:12px">No history loaded.</pre>
   </section>
 </div>
-<footer>GoTravel API · <a href="/health">health</a> · <a href="/swagger/index.html">swagger</a></footer>
+<footer>GoTravel API v1.5.0 · <a href="/health">health</a> · <a href="/swagger/index.html">swagger</a></footer>
 <script>
 const $ = (id) => document.getElementById(id);
 function headers() {
@@ -147,12 +170,55 @@ async function loadProvider() {
   const data = await res.json().catch(() => ({}));
   $("pushProvider").textContent = "provider: " + ((data.data && data.data.provider) || "unknown");
 }
+async function loadSecurity() {
+  const res = await fetch("/api/v1/admin/security/stats?hours=24", { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  const s = (data.data && data.data.stats) || {};
+  const labels = [
+    ["events_24h","Events 24h"],["successful_logins_24h","Logins 24h"],
+    ["failed_logins_24h","Failed 24h"],["blocked_logins_24h","Blocked 24h"],
+    ["unique_ips_24h","Unique IPs"],["active_sessions","Active sessions"],
+    ["total_devices","Devices"],["blocked_users","Blocked users"]
+  ];
+  $("securityStats").innerHTML = labels.map(([k,label]) => `<div class="stat"><b>${s[k] ?? 0}</b><span>${label}</span></div>`).join("");
+  show({ status: res.status, data });
+}
+async function loadEvents() {
+  const q = new URLSearchParams();
+  const uid = $("secUser").value.trim();
+  const ev = $("secEvent").value.trim();
+  const ip = $("secIP").value.trim();
+  if (uid) q.set("user_id", uid);
+  if (ev) q.set("event", ev);
+  if (ip) q.set("ip", ip);
+  q.set("limit", "100");
+  const res = await fetch("/api/v1/admin/security/events?" + q.toString(), { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  $("events").textContent = JSON.stringify(data, null, 2);
+  show({ status: res.status, data });
+}
+async function userAdminAction(action, body) {
+  const uid = $("secUser").value.trim();
+  if (!uid) { show({ error: "Enter a user ID first" }); return; }
+  const res = await fetch(`/api/v1/admin/users/${encodeURIComponent(uid)}/${action}`, {
+    method: "POST", headers: headers(), body: JSON.stringify(body || {})
+  });
+  const data = await res.json().catch(() => ({}));
+  show({ status: res.status, data });
+}
+function blockUser() {
+  if (!confirm("Block this user and revoke all sessions?")) return;
+  userAdminAction("block", { reason: "blocked from admin panel" });
+}
+function unblockUser() { userAdminAction("unblock", {}); }
+function logoutUser() { userAdminAction("logout-all", {}); }
 (function init() {
   $("token").value = localStorage.getItem("admin_token") || "";
   $("userId").value = localStorage.getItem("admin_user") || "";
   $("role").value = localStorage.getItem("admin_role") || "admin";
   loadStats();
   loadProvider();
+  loadSecurity();
 })();
 </script>
 </body>

@@ -72,13 +72,15 @@ flowchart LR
 - **Оплаты:** создание и подтверждение платежа.
 - **Отзывы и ваучеры:** рейтинг, комментарии, CRUD ваучеров.
 - **Аутентификация:** JWT HS256 access token + ротируемые refresh-токены, сессии в БД.
-- **MFA:** TOTP для Google Authenticator и WebAuthn/passkeys.
-- **Устройства и сессии:** список устройств, IP, время входа, отзыв сессии и «выйти на всех устройствах».
+- **MFA:** TOTP для Google Authenticator (с защитой от replay) и WebAuthn/passkeys.
+- **Устройства и сессии:** агрегированные устройства, IP-история каждой сессии, время входа, отзыв сессии и «выйти на всех устройствах».
+- **История входов и аудит:** таблица `auth_events` хранит успешные/неуспешные входы, MFA, OAuth, смену пароля, действия с устройствами и админские блокировки.
+- **Anti-bruteforce:** rate limiting по IP, временная блокировка после серии неудачных попыток, блокировка аккаунта и устройства администратором.
 - **OAuth2/OIDC:** authorization code + PKCE (S256) для мобильных клиентов, userinfo и discovery.
 - **RBAC/ABAC:** гид видит только свои туры, партнёр — только назначенные заказы.
 - **WebSocket:** геолокация, комнаты, presence, live-обновления.
 - **Push:** регистрация iOS/Android устройств и админская рассылка через FCM.
-- **Админка:** встроенная панель `/admin` со статистикой и отправкой push.
+- **Админка:** встроенная панель `/admin` со статистикой, push и разделом Security (события, IP, устройства, блокировки).
 - **Swagger + Postman:** полная OpenAPI-спецификация и готовая коллекция.
 - **Docker + CI/CD:** compose, GitHub Actions, релизные бинарники.
 
@@ -139,6 +141,28 @@ db:
 Секрет для JWT задаётся переменной `JWT_SECRET`. В production сервер не стартует без
 неё; в dev/docker используется значение по умолчанию (только для разработки).
 
+Безопасность и rate limiting настраиваются в `configs/config.yaml`:
+
+```yaml
+security:
+  trusted_proxies: []          # список IP/CIDR прокси; пусто = не доверять X-Forwarded-For
+  allow_header_auth: false     # X-User-Id/X-User-Role только для dev; в production всегда off
+  event_retention_days: 180    # срок хранения auth_events
+  session_cleanup_minutes: 30  # период janitor-а
+  max_failed_logins: 5         # lockout после N ошибок
+  lockout_minutes: 15
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  auth_requests_per_minute: 10
+```
+
+Переменные окружения: `TRUSTED_PROXIES`, `ALLOW_HEADER_AUTH`,
+`AUTH_EVENT_RETENTION_DAYS`, `SESSION_CLEANUP_MINUTES`, `AUTH_MAX_FAILED_LOGINS`,
+`AUTH_LOCKOUT_MINUTES`, `RATE_LIMIT_ENABLED`, `RATE_LIMIT_PER_MINUTE`,
+`AUTH_RATE_LIMIT_PER_MINUTE`.
+
 ## Документация
 
 | Документ | Описание |
@@ -163,8 +187,10 @@ Authorization: Bearer <access_token>
 ```
 
 JWT access token (HS256) дополняется одноразовым refresh-токеном; каждая сессия
-хранится в БД и привязана к устройству, IP и времени входа. Для локальной разработки
-остаётся fallback `X-User-Id` / `X-User-Role`.
+хранится в БД и привязана к устройству, IP и времени входа. При ротации refresh
+используется атомарная замена по старому хешу, поэтому повторное использование
+токена отклоняется. Legacy-fallback `X-User-Id` / `X-User-Role` выключен по
+умолчанию и принудительно отключается в production.
 
 Роли: `user`, `guide`, `partner`, `admin`. Гид видит и редактирует только свои туры,
 партнёр — только назначенные ему заказы, админ-маршруты `/admin/*` требуют роль `admin`.
@@ -186,6 +212,7 @@ JWT access token (HS256) дополняется одноразовым refresh-�
 | Отзывы | `/reviews` |
 | Ваучеры | `/vouchers` |
 | Устройства и сессии | `/auth/sessions`, `/auth/devices` |
+| Безопасность и аудит | `/auth/login-history`, `/auth/security/summary`, `/admin/security/*` |
 | Админ | `/admin` |
 
 Пример регистрации и логина:
@@ -204,10 +231,40 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
   -d '{"email":"user@example.com","password":"password123"}'
 ```
 
-Список устройств и сводка по аккаунту:
+Список сессий и устройств, IP-история и сводка безопасности:
 
 ```bash
 curl http://localhost:8080/api/v1/auth/sessions \
+  -H "Authorization: Bearer $TOKEN"
+
+curl http://localhost:8080/api/v1/auth/devices \
+  -H "Authorization: Bearer $TOKEN"
+
+curl http://localhost:8080/api/v1/auth/devices/<device_id> \
+  -H "Authorization: Bearer $TOKEN"
+
+curl http://localhost:8080/api/v1/auth/sessions/<session_id>/ips \
+  -H "Authorization: Bearer $TOKEN"
+
+curl http://localhost:8080/api/v1/auth/login-history?limit=50 \
+  -H "Authorization: Bearer $TOKEN"
+
+curl http://localhost:8080/api/v1/auth/security/summary \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Доверие/блокировка устройства и выход на всех остальных устройствах:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/devices/<device_id>/trust \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"trusted":true}'
+
+curl -X POST http://localhost:8080/api/v1/auth/devices/<device_id>/block \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"blocked":true}'
+
+curl -X POST http://localhost:8080/api/v1/auth/logout-others \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -314,6 +371,34 @@ curl -X POST http://localhost:8080/api/v1/admin/push \
 
 Для реальной доставки задайте `FCM_SERVER_KEY` (Firebase Cloud Messaging доставляет и на Android, и на iOS). Без ключа используется `log`-провайдер.
 
+## Админский security-раздел
+
+Админ видит глобальный аудит и может управлять доступом:
+
+```bash
+curl "http://localhost:8080/api/v1/admin/security/stats?hours=24" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl "http://localhost:8080/api/v1/admin/security/events?event=login_failed&limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl "http://localhost:8080/api/v1/admin/users/<user_id>/sessions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl "http://localhost:8080/api/v1/admin/users/<user_id>/devices" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl -X POST "http://localhost:8080/api/v1/admin/users/<user_id>/block" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"reason":"suspicious activity"}'
+
+curl -X POST "http://localhost:8080/api/v1/admin/users/<user_id>/logout-all" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Блокировка аккаунта автоматически отзывает все его сессии. Те же данные доступны
+в панели `/admin` в карточке «Security & audit».
+
 ## Деплой на VPS
 
 Кратко:
@@ -332,8 +417,8 @@ docker compose up -d --build
 Релиз создаётся автоматически при пуше тега `v*`:
 
 ```bash
-git tag v1.4.0
-git push origin v1.4.0
+git tag v1.5.0
+git push origin v1.5.0
 ```
 
 GitHub Actions соберёт и приложит к релизу:
@@ -361,8 +446,8 @@ internal/handler/           REST, WebSocket, push, admin
 internal/service/           бизнес-логика и синхронизация
 internal/repository/        PostgreSQL, upsert, пагинация
 internal/model/             доменные модели
-internal/security/          JWT, PKCE, TOTP, WebAuthn helpers
-internal/middleware/        auth, RBAC/ABAC middleware
+internal/security/          JWT, PKCE, TOTP (replay-safe), WebAuthn, device fingerprint
+internal/middleware/        auth, RBAC/ABAC, rate limit, request ID, security headers
 configs/                    конфигурация
 api/swagger/                OpenAPI YAML
 docs/                       REST, WebSocket, архитектура, VPS

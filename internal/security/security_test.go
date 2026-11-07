@@ -175,6 +175,28 @@ func TestValidateTOTPWindow(t *testing.T) {
 	}
 }
 
+func TestMatchTOTPStepReturnsStep(t *testing.T) {
+	secret, err := GenerateTOTPSecret()
+	if err != nil {
+		t.Fatalf("GenerateTOTPSecret: %v", err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	code, err := TOTPCode(secret, now)
+	if err != nil {
+		t.Fatalf("TOTPCode: %v", err)
+	}
+	step, ok := MatchTOTPStep(secret, code, now)
+	if !ok {
+		t.Fatal("expected matching step")
+	}
+	if want := now.Unix() / 30; step != want {
+		t.Fatalf("step = %d, want %d", step, want)
+	}
+	if _, ok := MatchTOTPStep(secret, "bad", now); ok {
+		t.Fatal("invalid code must not match")
+	}
+}
+
 func TestOTPAuthURL(t *testing.T) {
 	got := OTPAuthURL("GoTravel", "user@example.com", "JBSWY3DPEHPK3PXP")
 	for _, want := range []string{

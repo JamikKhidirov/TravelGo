@@ -24,6 +24,19 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 	);
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_reason VARCHAR(255);
+	UPDATE users SET blocked_reason = '' WHERE blocked_reason IS NULL;
+	ALTER TABLE users ALTER COLUMN blocked_reason SET DEFAULT '';
+	ALTER TABLE users ALTER COLUMN blocked_reason SET NOT NULL;
+	UPDATE users SET blocked = FALSE WHERE blocked IS NULL;
+	ALTER TABLE users ALTER COLUMN blocked SET DEFAULT FALSE;
+	ALTER TABLE users ALTER COLUMN blocked SET NOT NULL;
+	UPDATE users SET mfa_enabled = FALSE WHERE mfa_enabled IS NULL;
+	ALTER TABLE users ALTER COLUMN mfa_enabled SET DEFAULT FALSE;
+	ALTER TABLE users ALTER COLUMN mfa_enabled SET NOT NULL;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 	ALTER TABLE tours ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
 	CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -71,6 +84,63 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 		sign_count INTEGER DEFAULT 0,
 		created_at TIMESTAMPTZ DEFAULT NOW(),
 		last_used_at TIMESTAMPTZ
+	);
+
+	CREATE TABLE IF NOT EXISTS user_devices (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		fingerprint VARCHAR(64) NOT NULL,
+		name VARCHAR(150),
+		platform VARCHAR(50),
+		user_agent TEXT,
+		first_ip VARCHAR(80),
+		last_ip VARCHAR(80),
+		login_count INTEGER DEFAULT 0,
+		first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+		last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+		trusted BOOLEAN DEFAULT FALSE,
+		blocked BOOLEAN DEFAULT FALSE,
+		UNIQUE (user_id, fingerprint)
+	);
+
+	ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS device_id UUID REFERENCES user_devices(id) ON DELETE SET NULL;
+	ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_ip VARCHAR(80);
+	ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_method VARCHAR(32);
+	ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS request_count BIGINT DEFAULT 0;
+	UPDATE auth_sessions SET request_count = 0 WHERE request_count IS NULL;
+	ALTER TABLE auth_sessions ALTER COLUMN request_count SET DEFAULT 0;
+	ALTER TABLE auth_sessions ALTER COLUMN request_count SET NOT NULL;
+
+	ALTER TABLE user_mfa ADD COLUMN IF NOT EXISTS last_step BIGINT DEFAULT 0;
+	UPDATE user_mfa SET last_step = 0 WHERE last_step IS NULL;
+	ALTER TABLE user_mfa ALTER COLUMN last_step SET DEFAULT 0;
+	ALTER TABLE user_mfa ALTER COLUMN last_step SET NOT NULL;
+
+	CREATE TABLE IF NOT EXISTS session_ips (
+		session_id UUID NOT NULL REFERENCES auth_sessions(id) ON DELETE CASCADE,
+		ip VARCHAR(80) NOT NULL,
+		first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+		last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+		request_count BIGINT DEFAULT 1,
+		PRIMARY KEY (session_id, ip)
+	);
+
+	CREATE TABLE IF NOT EXISTS auth_events (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+		email VARCHAR(255),
+		event VARCHAR(64) NOT NULL,
+		success BOOLEAN NOT NULL DEFAULT TRUE,
+		reason VARCHAR(255),
+		session_id UUID,
+		device_id UUID,
+		ip VARCHAR(80),
+		user_agent TEXT,
+		platform VARCHAR(50),
+		device_name VARCHAR(150),
+		request_id VARCHAR(64),
+		metadata JSONB DEFAULT '{}'::jsonb,
+		created_at TIMESTAMPTZ DEFAULT NOW()
 	);
 
 	CREATE TABLE IF NOT EXISTS carts (
@@ -173,6 +243,15 @@ func (r *TravelRepository) MigrateExtra(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 	CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_auth_sessions_refresh ON auth_sessions(refresh_token_hash);
+	CREATE INDEX IF NOT EXISTS idx_auth_sessions_device ON auth_sessions(device_id);
+	CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id);
+	CREATE INDEX IF NOT EXISTS idx_user_devices_last_seen ON user_devices(last_seen_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_session_ips_ip ON session_ips(ip);
+	CREATE INDEX IF NOT EXISTS idx_auth_events_user_created ON auth_events(user_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_auth_events_created ON auth_events(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_auth_events_event ON auth_events(event);
+	CREATE INDEX IF NOT EXISTS idx_auth_events_ip ON auth_events(ip);
+	CREATE INDEX IF NOT EXISTS idx_auth_events_email ON auth_events(email);
 	CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkey_credentials(user_id);
 	CREATE INDEX IF NOT EXISTS idx_passkeys_credential ON passkey_credentials(credential_id);
@@ -336,9 +415,23 @@ func (r *TravelRepository) GetOrdersByUser(ctx context.Context, userID uuid.UUID
 }
 
 func (r *TravelRepository) UpdateOrderStatus(ctx context.Context, id uuid.UUID, status string) error {
-	query := "UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2"
-	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), status, id)
-	return err
+	switch status {
+	case "pending", "paid", "cancelled", "completed":
+	default:
+		return fmt.Errorf("invalid order status %q", status)
+	}
+	res, err := r.db.ExecContext(ctx, r.db.Rebind("UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2"), status, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("order not found")
+	}
+	return nil
 }
 
 func (r *TravelRepository) CreateReview(ctx context.Context, rv *model.Review) error {
@@ -684,8 +777,20 @@ func (r *TravelRepository) DistinctCountries(ctx context.Context) ([]string, err
 }
 
 func (r *TravelRepository) UpdateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
-	query := "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2"
+	query := "UPDATE users SET password_hash = $1, password_changed_at = NOW(), updated_at = NOW() WHERE id = $2"
 	_, err := r.db.ExecContext(ctx, r.db.Rebind(query), passwordHash, userID)
+	return err
+}
+
+func (r *TravelRepository) UpdateUserLastLogin(ctx context.Context, userID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, r.db.Rebind("UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1"), userID)
+	return err
+}
+
+func (r *TravelRepository) SetUserBlocked(ctx context.Context, userID uuid.UUID, blocked bool, reason string) error {
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(
+		"UPDATE users SET blocked = $1, blocked_reason = $2, updated_at = NOW() WHERE id = $3"),
+		blocked, reason, userID)
 	return err
 }
 

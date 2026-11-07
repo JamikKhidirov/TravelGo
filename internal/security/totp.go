@@ -43,17 +43,25 @@ func TOTPCode(secret string, at time.Time) (string, error) {
 }
 
 func ValidateTOTP(secret, code string, at time.Time) bool {
+	_, ok := MatchTOTPStep(secret, code, at)
+	return ok
+}
+
+// MatchTOTPStep returns the TOTP time-step that matched the supplied code.
+// The returned step can be stored to prevent replaying the same code.
+func MatchTOTPStep(secret, code string, at time.Time) (int64, bool) {
 	code = strings.TrimSpace(code)
 	if len(code) != 6 {
-		return false
+		return 0, false
 	}
 	for _, delta := range []int{-1, 0, 1} {
-		expected, err := TOTPCode(secret, at.Add(time.Duration(delta)*30*time.Second))
+		moment := at.Add(time.Duration(delta) * 30 * time.Second)
+		expected, err := TOTPCode(secret, moment)
 		if err == nil && hmac.Equal([]byte(expected), []byte(code)) {
-			return true
+			return moment.Unix() / 30, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 func OTPAuthURL(issuer, account, secret string) string {

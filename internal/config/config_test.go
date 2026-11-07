@@ -118,3 +118,51 @@ func TestLoadRejectsIncompleteDB(t *testing.T) {
 		t.Fatal("expected validation error for missing db config")
 	}
 }
+
+func TestSecurityAndRateLimitDefaults(t *testing.T) {
+	path := writeConfig(t, minimalConfig)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Security.EventRetentionDays != 180 {
+		t.Fatalf("EventRetentionDays = %d, want 180", cfg.Security.EventRetentionDays)
+	}
+	if cfg.Security.MaxFailedLogins != 5 {
+		t.Fatalf("MaxFailedLogins = %d, want 5", cfg.Security.MaxFailedLogins)
+	}
+	if cfg.Security.LockoutMinutes != 15 {
+		t.Fatalf("LockoutMinutes = %d, want 15", cfg.Security.LockoutMinutes)
+	}
+	if !cfg.RateLimitEnabled() {
+		t.Fatal("rate limiting should be enabled by default")
+	}
+	if cfg.RateLimit.RequestsPerMinute != 120 || cfg.RateLimit.AuthRequestsPerMinute != 10 {
+		t.Fatalf("rate limits = %d/%d, want 120/10", cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.AuthRequestsPerMinute)
+	}
+}
+
+func TestHeaderAuthDisabledInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("ALLOW_HEADER_AUTH", "true")
+	path := writeConfig(t, minimalConfig)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Security.AllowHeaderAuth {
+		t.Fatal("header auth fallback must be disabled in production")
+	}
+}
+
+func TestRateLimitCanBeDisabled(t *testing.T) {
+	t.Setenv("RATE_LIMIT_ENABLED", "false")
+	path := writeConfig(t, minimalConfig)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.RateLimitEnabled() {
+		t.Fatal("rate limiting should be disabled by env")
+	}
+}

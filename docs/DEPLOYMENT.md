@@ -74,9 +74,42 @@ redis:
 ```env
 DB_PASSWORD=strong-password
 FCM_SERVER_KEY=your-firebase-server-key
+JWT_SECRET=replace-with-long-random-string
 ```
 
 `FCM_SERVER_KEY` нужен для реальных push-уведомлений на iOS и Android через Firebase Cloud Messaging. Без него сервис работает с `log`-провайдером.
+
+### Безопасность в production
+
+- `JWT_SECRET` обязателен: без него сервер не стартует в `app.env: production`.
+- `security.allow_header_auth` принудительно выключается в production — заголовки
+  `X-User-Id`/`X-User-Role` не принимаются.
+- За reverse proxy задайте `security.trusted_proxies` (например, `127.0.0.1`), иначе
+  IP клиента в аудите будет адресом прокси. Пустой список = не доверять
+  `X-Forwarded-For`.
+- Rate limiting включён по умолчанию: 120 запросов/мин на IP и 10/мин на auth-эндпоинты.
+- Janitor раз в 30 минут чистит просроченные сессии и старые события аудита
+  (`event_retention_days`, по умолчанию 180).
+
+```yaml
+security:
+  trusted_proxies: ["127.0.0.1"]
+  allow_header_auth: false
+  event_retention_days: 180
+  session_cleanup_minutes: 30
+  max_failed_logins: 5
+  lockout_minutes: 15
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  auth_requests_per_minute: 10
+```
+
+Переменные окружения: `TRUSTED_PROXIES`, `ALLOW_HEADER_AUTH`,
+`AUTH_EVENT_RETENTION_DAYS`, `SESSION_CLEANUP_MINUTES`, `AUTH_MAX_FAILED_LOGINS`,
+`AUTH_LOCKOUT_MINUTES`, `RATE_LIMIT_ENABLED`, `RATE_LIMIT_PER_MINUTE`,
+`AUTH_RATE_LIMIT_PER_MINUTE`.
 
 ## 6. Запуск
 

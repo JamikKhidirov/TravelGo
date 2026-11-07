@@ -3,6 +3,8 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"go-travel/internal/middleware"
 	"go-travel/internal/model"
+	"go-travel/internal/security"
 	"go-travel/internal/service"
 )
 
@@ -41,9 +44,17 @@ func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.AuthMidd
 			protected.POST("/change-password", h.changePassword)
 			protected.POST("/logout", h.logout)
 			protected.POST("/logout-all", h.logoutAll)
+			protected.POST("/logout-others", h.logoutOthers)
 			protected.GET("/sessions", h.sessions)
-			protected.GET("/devices", h.sessions)
+			protected.GET("/sessions/:id/ips", h.sessionIPs)
 			protected.DELETE("/sessions/:id", h.revokeSession)
+			protected.GET("/login-history", h.loginHistory)
+			protected.GET("/security/summary", h.securitySummary)
+			protected.GET("/devices", h.devices)
+			protected.GET("/devices/:id", h.device)
+			protected.POST("/devices/:id/trust", h.trustDevice)
+			protected.POST("/devices/:id/block", h.blockDevice)
+			protected.DELETE("/devices/:id", h.removeDevice)
 			protected.GET("/mfa/status", h.mfaStatus)
 			protected.POST("/mfa/setup", h.mfaSetup)
 			protected.POST("/mfa/enable", h.mfaEnable)
@@ -89,19 +100,40 @@ type mfaLoginRequest struct {
 
 func deviceInfo(c *gin.Context) *model.DeviceInfo {
 	ua := c.Request.UserAgent()
-	platform := c.GetHeader("X-Device-Platform")
-	if platform == "" {
-		platform = detectPlatform(ua)
-	}
+	platform := security.NormalizePlatform(firstHeaderValue(c.GetHeader("X-Device-Platform"), detectPlatform(ua)))
 	name := c.GetHeader("X-Device-Name")
 	if name == "" {
 		name = friendlyDeviceName(ua)
 	}
 	return &model.DeviceInfo{
-		Name:      name,
-		Platform:  platform,
-		UserAgent: ua,
-		IP:        c.ClientIP(),
+		Name:        name,
+		Platform:    platform,
+		UserAgent:   ua,
+		IP:          c.ClientIP(),
+		RequestID:   c.GetString("request_id"),
+		Fingerprint: security.DeviceFingerprint(name, platform, ua),
+	}
+}
+
+func firstHeaderValue(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func authErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, service.ErrTooManyAttempts):
+		return http.StatusTooManyRequests
+	case errors.Is(err, service.ErrAccountBlocked), errors.Is(err, service.ErrDeviceBlocked):
+		return http.StatusForbidden
+	case errors.Is(err, service.ErrInvalidToken), errors.Is(err, service.ErrInvalidCredentials), errors.Is(err, service.ErrMFARequired), errors.Is(err, service.ErrInvalidMFACode):
+		return http.StatusUnauthorized
+	default:
+		return http.StatusBadRequest
 	}
 }
 
@@ -186,7 +218,7 @@ func (h *AuthHandler) login(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: err.Error()})
+		c.JSON(authErrorStatus(err), model.Response{Success: false, Error: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: authResponse(u, pair)})
@@ -200,7 +232,7 @@ func (h *AuthHandler) loginMFA(c *gin.Context) {
 	}
 	u, pair, err := h.authSvc.LoginMFA(c.Request.Context(), req.MFAToken, req.Code, deviceInfo(c))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: err.Error()})
+		c.JSON(authErrorStatus(err), model.Response{Success: false, Error: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: authResponse(u, pair)})
@@ -216,7 +248,7 @@ func (h *AuthHandler) refresh(c *gin.Context) {
 	}
 	pair, err := h.authSvc.Refresh(c.Request.Context(), req.RefreshToken, deviceInfo(c))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: err.Error()})
+		c.JSON(authErrorStatus(err), model.Response{Success: false, Error: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: pair})
@@ -229,8 +261,13 @@ func (h *AuthHandler) logout(c *gin.Context) {
 		return
 	}
 	if sid, ok := currentSessionID(c); ok {
-		if err := h.authSvc.Logout(c.Request.Context(), sid, userID); err != nil {
+		revoked, err := h.authSvc.Logout(c.Request.Context(), sid, userID)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+			return
+		}
+		if !revoked {
+			c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "session not found"})
 			return
 		}
 		c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "logged out"}})
@@ -259,11 +296,31 @@ func (h *AuthHandler) logoutAll(c *gin.Context) {
 			keep = &sid
 		}
 	}
-	if err := h.authSvc.LogoutAll(c.Request.Context(), userID, keep); err != nil {
+	n, err := h.authSvc.LogoutAll(c.Request.Context(), userID, keep)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "all sessions revoked"}})
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "all sessions revoked", "revoked": n}})
+}
+
+func (h *AuthHandler) logoutOthers(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	sid, ok := currentSessionID(c)
+	if !ok {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "current session is required"})
+		return
+	}
+	n, err := h.authSvc.LogoutOthers(c.Request.Context(), userID, sid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "other sessions revoked", "revoked": n}})
 }
 
 func (h *AuthHandler) sessions(c *gin.Context) {
@@ -307,19 +364,24 @@ func (h *AuthHandler) sessions(c *gin.Context) {
 			lastActivity = s.LastSeenAt
 		}
 		sessions = append(sessions, gin.H{
-			"id":           s.ID,
-			"session_id":   s.ID,
-			"device":       s.DeviceName,
-			"device_name":  s.DeviceName,
-			"platform":     s.Platform,
-			"ip":           s.IP,
-			"user_agent":   s.UserAgent,
-			"login_at":     s.CreatedAt,
-			"last_seen_at": s.LastSeenAt,
-			"expires_at":   s.ExpiresAt,
-			"revoked_at":   s.RevokedAt,
-			"is_current":   s.Current,
-			"is_active":    isActive,
+			"id":            s.ID,
+			"session_id":    s.ID,
+			"device_id":     s.DeviceID,
+			"device":        s.DeviceName,
+			"device_name":   s.DeviceName,
+			"platform":      s.Platform,
+			"ip":            s.IP,
+			"last_ip":       s.LastIP,
+			"last_method":   s.LastMethod,
+			"request_count": s.RequestCount,
+			"ips":           s.IPs,
+			"user_agent":    s.UserAgent,
+			"login_at":      s.CreatedAt,
+			"last_seen_at":  s.LastSeenAt,
+			"expires_at":    s.ExpiresAt,
+			"revoked_at":    s.RevokedAt,
+			"is_current":    s.Current,
+			"is_active":     isActive,
 		})
 	}
 
@@ -348,11 +410,195 @@ func (h *AuthHandler) revokeSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid session id"})
 		return
 	}
-	if err := h.authSvc.Logout(c.Request.Context(), sid, userID); err != nil {
+	revoked, err := h.authSvc.Logout(c.Request.Context(), sid, userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
 		return
 	}
+	if !revoked {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "session not found"})
+		return
+	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "session revoked"}})
+}
+
+func (h *AuthHandler) sessionIPs(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	sid, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid session id"})
+		return
+	}
+	items, err := h.authSvc.SessionIPs(c.Request.Context(), sid, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"session_id": sid, "ips": items}})
+}
+
+func (h *AuthHandler) loginHistory(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	limit, offset := 50, 0
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if v := c.Query("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	items, total, err := h.authSvc.LoginHistory(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: items, Meta: gin.H{
+		"limit": limit, "offset": offset, "total": total,
+	}})
+}
+
+func (h *AuthHandler) securitySummary(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	summary, err := h.authSvc.SecuritySummary(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: summary})
+}
+
+func (h *AuthHandler) devices(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	cur, _ := currentSessionID(c)
+	items, err := h.authSvc.Devices(c.Request.Context(), userID, cur)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"devices": items, "total": len(items)}})
+}
+
+func (h *AuthHandler) device(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	deviceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid device id"})
+		return
+	}
+	item, err := h.authSvc.Device(c.Request.Context(), deviceID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "device not found"})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: item})
+}
+
+func (h *AuthHandler) trustDevice(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	deviceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid device id"})
+		return
+	}
+	var req struct {
+		Trusted *bool `json:"trusted"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	trusted := true
+	if req.Trusted != nil {
+		trusted = *req.Trusted
+	}
+	ok, err = h.authSvc.TrustDevice(c.Request.Context(), deviceID, userID, trusted)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "device not found"})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"device_id": deviceID, "trusted": trusted}})
+}
+
+func (h *AuthHandler) blockDevice(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	deviceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid device id"})
+		return
+	}
+	var req struct {
+		Blocked *bool `json:"blocked"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	blocked := true
+	if req.Blocked != nil {
+		blocked = *req.Blocked
+	}
+	ok, err = h.authSvc.BlockDevice(c.Request.Context(), deviceID, userID, blocked)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "device not found"})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"device_id": deviceID, "blocked": blocked}})
+}
+
+func (h *AuthHandler) removeDevice(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "authorization required"})
+		return
+	}
+	deviceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid device id"})
+		return
+	}
+	ok, err = h.authSvc.RemoveDevice(c.Request.Context(), deviceID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "device not found"})
+		return
+	}
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "device removed"}})
 }
 
 func (h *AuthHandler) me(c *gin.Context) {
@@ -425,11 +671,15 @@ func (h *AuthHandler) changePassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	if err := h.authSvc.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+	var keep []uuid.UUID
+	if sid, ok := currentSessionID(c); ok {
+		keep = append(keep, sid)
+	}
+	if err := h.authSvc.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword, keep...); err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "password changed"}})
+	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "password changed", "other_sessions_revoked": true}})
 }
 
 // --- MFA ---
@@ -611,8 +861,13 @@ func (h *AuthHandler) deletePasskey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid passkey id"})
 		return
 	}
-	if err := h.authSvc.DeletePasskey(c.Request.Context(), userID, id); err != nil {
+	ok, err = h.authSvc.DeletePasskey(c.Request.Context(), userID, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.Response{Success: false, Error: err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, model.Response{Success: false, Error: "passkey not found"})
 		return
 	}
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{"message": "passkey deleted"}})
@@ -634,6 +889,7 @@ type oauthAuthorizeRequest struct {
 }
 
 func (h *AuthHandler) oauthAuthorize(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	var req oauthAuthorizeRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
@@ -657,13 +913,13 @@ func (h *AuthHandler) oauthAuthorize(c *gin.Context) {
 		}
 		user = u
 	} else if req.Email != "" && req.Password != "" {
-		u, err := h.authSvc.Authenticate(c.Request.Context(), req.Email, req.Password)
+		u, err := h.authSvc.Authenticate(c.Request.Context(), req.Email, req.Password, deviceInfo(c))
 		if errors.Is(err, service.ErrMFARequired) {
 			c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: "mfa required; complete /auth/login/mfa first"})
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, model.Response{Success: false, Error: err.Error()})
+			c.JSON(authErrorStatus(err), model.Response{Success: false, Error: err.Error()})
 			return
 		}
 		user = u
@@ -672,11 +928,29 @@ func (h *AuthHandler) oauthAuthorize(c *gin.Context) {
 		return
 	}
 
-	code, err := h.authSvc.AuthorizationCode(c.Request.Context(), user, req.ClientID, req.RedirectURI, req.Scope, req.CodeChallenge, req.CodeChallengeMethod, req.Nonce)
+	code, err := h.authSvc.AuthorizationCode(c.Request.Context(), user, req.ClientID, req.RedirectURI, req.Scope, req.CodeChallenge, req.CodeChallengeMethod, req.Nonce, deviceInfo(c))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: err.Error()})
 		return
 	}
+
+	// A browser GET must return to the client with 302; API clients still get JSON.
+	if c.Request.Method == http.MethodGet {
+		target, err := url.Parse(req.RedirectURI)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, model.Response{Success: false, Error: "invalid redirect_uri"})
+			return
+		}
+		q := target.Query()
+		q.Set("code", code)
+		if req.State != "" {
+			q.Set("state", req.State)
+		}
+		target.RawQuery = q.Encode()
+		c.Redirect(http.StatusFound, target.String())
+		return
+	}
+
 	c.JSON(http.StatusOK, model.Response{Success: true, Data: gin.H{
 		"code":           code,
 		"state":          req.State,
@@ -696,6 +970,8 @@ type oauthTokenRequest struct {
 }
 
 func (h *AuthHandler) oauthToken(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
 	var req oauthTokenRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": err.Error()})
@@ -709,7 +985,7 @@ func (h *AuthHandler) oauthToken(c *gin.Context) {
 		}
 		pair, err := h.authSvc.ExchangeCode(c.Request.Context(), req.Code, req.ClientID, req.RedirectURI, req.CodeVerifier, deviceInfo(c))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": err.Error()})
+			c.JSON(authErrorStatus(err), gin.H{"error": "invalid_grant", "error_description": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -719,12 +995,13 @@ func (h *AuthHandler) oauthToken(c *gin.Context) {
 			"refresh_token": pair.RefreshToken,
 			"id_token":      pair.IDToken,
 			"session_id":    pair.SessionID,
-			"scope":         "openid profile email",
+			"device_id":     pair.DeviceID,
+			"scope":         pair.Scope,
 		})
 	case "refresh_token":
 		pair, err := h.authSvc.Refresh(c.Request.Context(), req.RefreshToken, deviceInfo(c))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": err.Error()})
+			c.JSON(authErrorStatus(err), gin.H{"error": "invalid_grant", "error_description": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -734,6 +1011,8 @@ func (h *AuthHandler) oauthToken(c *gin.Context) {
 			"refresh_token": pair.RefreshToken,
 			"id_token":      pair.IDToken,
 			"session_id":    pair.SessionID,
+			"device_id":     pair.DeviceID,
+			"scope":         pair.Scope,
 		})
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported_grant_type"})

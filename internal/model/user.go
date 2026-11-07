@@ -7,16 +7,20 @@ import (
 )
 
 type User struct {
-	ID         uuid.UUID `json:"id" db:"id"`
-	Email      string    `json:"email" db:"email" validate:"required,email"`
-	Password   string    `json:"-" db:"password_hash" validate:"required,min=6"`
-	FirstName  string    `json:"first_name" db:"first_name" validate:"required"`
-	LastName   string    `json:"last_name" db:"last_name" validate:"required"`
-	Phone      string    `json:"phone" db:"phone"`
-	MFAEnabled bool      `json:"mfa_enabled" db:"mfa_enabled"`
-	Role       string    `json:"role" db:"role" validate:"required,oneof=user admin guide partner"`
-	CreatedAt  time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+	ID                uuid.UUID  `json:"id" db:"id"`
+	Email             string     `json:"email" db:"email" validate:"required,email"`
+	Password          string     `json:"-" db:"password_hash" validate:"required,min=6"`
+	FirstName         string     `json:"first_name" db:"first_name" validate:"required"`
+	LastName          string     `json:"last_name" db:"last_name" validate:"required"`
+	Phone             string     `json:"phone" db:"phone"`
+	MFAEnabled        bool       `json:"mfa_enabled" db:"mfa_enabled"`
+	Blocked           bool       `json:"blocked" db:"blocked"`
+	BlockedReason     string     `json:"blocked_reason,omitempty" db:"blocked_reason"`
+	PasswordChangedAt *time.Time `json:"password_changed_at,omitempty" db:"password_changed_at"`
+	LastLoginAt       *time.Time `json:"last_login_at,omitempty" db:"last_login_at"`
+	Role              string     `json:"role" db:"role" validate:"required,oneof=user admin guide partner"`
+	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 type LoginRequest struct {
